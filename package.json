@@ -1,0 +1,22 @@
+{
+  "name": "haq-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HAQ — Benefits, Unlocked. Welfare navigation platform for Pune construction workers.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@haq/shared && npm run build --workspace=@haq/api",
+    "dev:api": "npm run dev --workspace=@haq/api",
+    "dev:mobile": "npm run start --workspace=@haq/mobile",
+    "test": "npm run test --workspace=@haq/shared && npm run test --workspace=@haq/api",
+    "prisma:generate": "npm run prisma:generate --workspace=@haq/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@haq/api",
+    "prisma:seed": "npm run prisma:seed --workspace=@haq/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

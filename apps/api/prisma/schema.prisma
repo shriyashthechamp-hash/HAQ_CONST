@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Language {
+  mr
+  hi
+  en
+}
+
+enum AssessmentStatus {
+  PRELIMINARY_SATISFIED
+  NEEDS_VERIFICATION
+  INELIGIBLE
+}
+
+enum DocumentStatus {
+  AVAILABLE
+  NEEDS_VERIFICATION
+  MISSING
+  ACTION_REQUIRED
+}
+
+enum JourneyStage {
+  ELIGIBILITY_GUIDANCE
+  DOCUMENT_PREPARATION
+  PORTAL_HANDOFF
+  SUBMITTED
+  OUTCOME_RECORDED
+}
+
+enum JourneyEvidenceType {
+  OFFICIAL_ACKNOWLEDGEMENT_SLIP
+  REGISTRATION_NUMBER
+  IN_PERSON_RECEIPT
+  PORTAL_SCREENSHOT
+  VERIFIED_OFFICIAL_INTEGRATION
+}
+
+enum ReviewStatus {
+  REVIEWED
+  PROVISIONAL
+  UNVERIFIED
+}
+
+model Session {
+  id                String                 @id @default(uuid())
+  preferredLanguage Language               @default(mr)
+  deviceInfo        String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  assessments       EligibilityAssessment[]
+  checklistItems    DocumentChecklistItem[]
+  journeyEvents     JourneyEvent[]
+  messages          ConversationMessage[]
+
+  @@map("sessions")
+}
+
+model KnowledgeSource {
+  id            String         @id
+  title         String
+  url           String
+  sourceType    String
+  checkedAt     DateTime
+  version       String
+  reviewStatus  ReviewStatus   @default(REVIEWED)
+  excerpt       String
+  reviewerNotes String
+
+  rules         BenefitRule[]
+  requirements  DocumentRequirement[]
+
+  @@map("knowledge_sources")
+}
+
+model BenefitRule {
+  id              String         @id @default(uuid())
+  benefitType     String         @default("MAHABOCW_REGISTRATION")
+  ruleKey         String
+  condition       String
+  applicableWhen  String
+  sourceId        String
+  source          KnowledgeSource @relation(fields: [sourceId], references: [id])
+  version         String         @default("v2024.1")
+  effectiveFrom   DateTime       @default(now())
+  effectiveTo     DateTime?
+  reviewStatus    ReviewStatus   @default(REVIEWED)
+
+  @@index([benefitType, ruleKey])
+  @@map("benefit_rules")
+}
+
+model DocumentRequirement {
+  id                   String         @id @default(uuid())
+  benefitType          String         @default("MAHABOCW_REGISTRATION")
+  documentKey          String         @unique
+  title                Json           // { en: string, mr: string, hi: string }
+  description          Json           // { en: string, mr: string, hi: string }
+  ruleVersion          String         @default("v2024.1")
+  sourceId             String
+  source               KnowledgeSource @relation(fields: [sourceId], references: [id])
+  reviewStatus         ReviewStatus   @default(REVIEWED)
+  acceptedAlternatives Json           // { en: string[], mr: string[], hi: string[] }
+  formDownloadUrl      String?
+
+  checklistItems       DocumentChecklistItem[]
+
+  @@index([benefitType, documentKey])
+  @@map("document_requirements")
+}
+
+model DocumentChecklistItem {
+  id            String              @id @default(uuid())
+  sessionId     String
+  session       Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  requirementId String
+  requirement   DocumentRequirement @relation(fields: [requirementId], references: [id])
+  status        DocumentStatus      @default(MISSING)
+  userNotes     String              @default("")
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([sessionId, requirementId])
+  @@map("document_checklist_items")
+}
+
+model EligibilityAssessment {
+  id               String           @id @default(uuid())
+  sessionId        String
+  session          Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  benefitType      String           @default("MAHABOCW_REGISTRATION")
+  answers          Json
+  assessmentStatus AssessmentStatus
+  ruleVersion      String           @default("v2024.1")
+  satisfiedChecks  Json             // array of EligibilityCheckResult
+  unresolvedChecks Json             // array of EligibilityCheckResult
+  failedChecks     Json             // array of EligibilityCheckResult
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([sessionId, benefitType])
+  @@map("eligibility_assessments")
+}
+
+model JourneyEvent {
+  id                String               @id @default(uuid())
+  sessionId         String
+  session           Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  eventType         JourneyStage
+  evidenceType      JourneyEvidenceType?
+  evidenceReference String?
+  createdAt         DateTime             @default(now())
+
+  @@index([sessionId, eventType])
+  @@map("journey_events")
+}
+
+model ConversationMessage {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String   // 'user' | 'assistant'
+  content   String
+  citations Json?    // KnowledgeSourceCitation[]
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@map("conversation_messages")
+}

@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables & secrets (CRITICAL: Never commit secrets)
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!apps/api/.env.example
+
+# Build artifacts
+dist/
+build/
+.expo/
+web-build/
+*.tsbuildinfo
+
+# Prisma
+dev.db
+dev.db-journal
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+.nyc_output/
