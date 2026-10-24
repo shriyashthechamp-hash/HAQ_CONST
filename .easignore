@@ -1,0 +1,50 @@
+# EAS Build ignore — defense-in-depth
+# Primary fix: Git root is now scoped to Haq_Construct/
+# This file provides additional safety against stray files
+
+# System caches and OS files
+Library/
+**/Library/
+.Trash/
+**/.Trash/
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Browser caches
+**/Chrome/Default/Cache/
+**/Cache_Data/
+
+# Dependencies (EAS installs fresh)
+node_modules/
+**/node_modules/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist/
+build/
+web-build/
+.expo/
+**/.expo/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Database files
+*.db
+*.db-journal
