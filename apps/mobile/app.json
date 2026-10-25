@@ -33,7 +33,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "haq",
     "extra": {
