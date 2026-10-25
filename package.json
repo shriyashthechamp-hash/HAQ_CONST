@@ -8,6 +8,8 @@
     "apps/*"
   ],
   "scripts": {
+    "postinstall": "npm run build --workspace=@haq/shared",
+    "eas-build-post-install": "npm run build --workspace=@haq/shared",
     "build": "npm run build --workspace=@haq/shared && npm run build --workspace=@haq/api",
     "dev:api": "npm run dev --workspace=@haq/api",
     "dev:mobile": "npm run start --workspace=@haq/mobile",
