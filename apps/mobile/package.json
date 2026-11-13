@@ -39,5 +39,13 @@
     "@types/react": "~18.3.12",
     "typescript": "^5.4.5"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["expo-av", "@haq/shared", "query-string"],
+        "listUnknownPackages": false
+      }
+    }
+  },
   "private": true
 }

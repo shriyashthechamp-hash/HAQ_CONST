@@ -13,7 +13,16 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://172.16.12.46:4000"
+        "EXPO_PUBLIC_API_URL": "http://10.0.2.2:4000"
+      }
+    },
+    "release-candidate": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://10.0.2.2:4000"
       }
     },
     "production": {
