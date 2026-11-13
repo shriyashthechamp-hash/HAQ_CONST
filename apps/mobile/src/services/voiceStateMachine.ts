@@ -31,3 +31,4 @@ export const INITIAL_VOICE_STATE: VoiceStateContext = {
   durationMs: 0,
   transcript: '',
 };
+

@@ -9,15 +9,18 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
-  Linking,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/theme/colors';
+import { Typography } from '../src/theme/typography';
+import { Spacing, Radius, Shadows } from '../src/theme/spacing';
 import { useApp } from '../src/context/AppContext';
 import { HeaderBar } from '../src/components/HeaderBar';
 import { BottomNav } from '../src/components/BottomNav';
-import { SourceCitationCard } from '../src/components/SourceCitationCard';
+import { DocumentRow } from '../src/components/DocumentRow';
 import { ChecklistOfflineService } from '../src/services/checklistCache';
 import { CachedChecklistState, DocumentChecklistItem, DocumentStatus } from '@haq/shared';
 import { VoiceGuidanceButton } from '../src/components/VoiceGuidanceButton';
@@ -33,9 +36,12 @@ export default function DocumentsScreen() {
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [activeFilter, setActiveFilter] = useState<'ALL' | 'AVAILABLE' | 'PENDING'>('ALL');
+
+  // Modal State
   const [selectedItem, setSelectedItem] = useState<DocumentChecklistItem | null>(null);
   const [editingNotes, setEditingNotes] = useState<string>('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<DocumentStatus>('MISSING');
   const [modalVisible, setModalVisible] = useState<boolean>(false);
 
   useEffect(() => {
@@ -45,7 +51,6 @@ export default function DocumentsScreen() {
   const loadChecklist = async () => {
     setLoading(true);
     try {
-      // 1. Read immediate cache for instantaneous, offline-ready UI
       const cached = await ChecklistOfflineService.loadCachedChecklist(sessionId);
       setCacheState(cached);
       setItems(cached.items);
@@ -53,8 +58,6 @@ export default function DocumentsScreen() {
     } finally {
       setLoading(false);
     }
-
-    // 2. Perform background sync with server
     await performSync();
   };
 
@@ -66,7 +69,7 @@ export default function DocumentsScreen() {
       setItems(result.state.items);
       setProgressPercent(result.state.progressPercent);
     } catch (err: any) {
-      console.warn('[Documents] Background sync error:', err?.message || err);
+      console.warn('[Documents] Background sync:', err?.message || err);
     } finally {
       setSyncing(false);
       setRefreshing(false);
@@ -80,18 +83,18 @@ export default function DocumentsScreen() {
 
   const handleOpenStatusModal = (item: DocumentChecklistItem) => {
     setSelectedItem(item);
+    setSelectedStatus(item.status);
     setEditingNotes(item.userNotes || '');
     setModalVisible(true);
   };
 
-  const handleUpdateStatus = async (newStatus: DocumentStatus) => {
+  const handleSaveModal = async () => {
     if (!selectedItem) return;
 
-    // 1. Local-first update: instant persistence & UI feedback
     const newState = await ChecklistOfflineService.updateItemLocally(
       sessionId,
       selectedItem.id,
-      newStatus,
+      selectedStatus,
       editingNotes
     );
 
@@ -101,41 +104,22 @@ export default function DocumentsScreen() {
     setModalVisible(false);
     setSelectedItem(null);
 
-    // 2. Trigger asynchronous background sync
+    // Asynchronous background sync
     performSync();
   };
 
-  const getStatusBadge = (status: DocumentStatus) => {
-    switch (status) {
-      case 'AVAILABLE':
-        return {
-          label: t('docAvailable'),
-          color: Colors.statusAvailable,
-          bg: Colors.successSurface,
-        };
-      case 'NEEDS_VERIFICATION':
-        return {
-          label: t('docNeedsVerification'),
-          color: Colors.statusNeedsVerification,
-          bg: Colors.warningSurface,
-        };
-      case 'ACTION_REQUIRED':
-        return {
-          label: t('docActionRequired'),
-          color: Colors.statusActionRequired,
-          bg: 'rgba(255, 107, 44, 0.15)',
-        };
-      case 'MISSING':
-      default:
-        return {
-          label: t('docMissing'),
-          color: Colors.statusMissing,
-          bg: 'rgba(100, 116, 139, 0.15)',
-        };
+  const filteredItems = items.filter((item) => {
+    if (activeFilter === 'AVAILABLE') {
+      return item.status === 'AVAILABLE';
     }
-  };
+    if (activeFilter === 'PENDING') {
+      return item.status !== 'AVAILABLE';
+    }
+    return true;
+  });
 
-  const pendingCount = Object.keys(cacheState?.pendingUpdates || {}).length;
+  const availableCount = items.filter((i) => i.status === 'AVAILABLE').length;
+  const pendingCount = items.filter((i) => i.status !== 'AVAILABLE').length;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -144,262 +128,144 @@ export default function DocumentsScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={Colors.constructionOrange}
-            colors={[Colors.constructionOrange]}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        {/* Title Section */}
+        {/* Title Header */}
         <View style={styles.titleSection}>
-          <View style={styles.titleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.screenTitle}>{t('docsTitle')}</Text>
-              <Text style={styles.screenSubtitle}>{t('docsSubtitle')}</Text>
-            </View>
+          <Text style={styles.screenTitle}>{t('docsTitle')}</Text>
+          <Text style={styles.screenSubtitle}>{t('docsSubtitle')}</Text>
+        </View>
 
-            {/* Quick Action: Open Form-V Generator */}
-            <TouchableOpacity
-              style={styles.topFormVButton}
-              onPress={() => router.push('/form-v')}
-              accessibilityLabel="फॉर्म-५ जनरेटर उघडा"
-            >
-              <Text style={styles.topFormVButtonText}>📄 फॉर्म-५ जनरेटर</Text>
-            </TouchableOpacity>
+        {/* Progress & Offline Sync Status Card */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressCardHeader}>
+            <View>
+              <Text style={styles.progressCardLabel}>{t('preparationProgress')}</Text>
+              <Text style={styles.progressCardNumber}>
+                {availableCount} / {items.length} {language === 'mr' ? 'कागदपत्रे तयार' : language === 'hi' ? 'दस्तावेज तैयार' : 'Documents Ready'}
+              </Text>
+            </View>
+            <View style={styles.progressBadge}>
+              <Text style={styles.progressBadgeText}>{progressPercent}%</Text>
+            </View>
           </View>
 
-          {/* Voice Guidance Button */}
-          <View style={{ marginTop: 12 }}>
+          {/* Progress Bar */}
+          <View style={styles.progressBarTrack}>
+            <View style={[styles.progressBarFill, { width: `${Math.max(8, progressPercent)}%` }]} />
+          </View>
+
+          {/* Offline Sync Banner */}
+          <View style={styles.syncRow}>
+            <View style={styles.syncStatusLeft}>
+              <View style={styles.syncDot} />
+              <Text style={styles.syncStatusText}>
+                {syncing
+                  ? (language === 'mr' ? 'सर्व्हरशी सिंक होत आहे...' : language === 'hi' ? 'सिंक हो रहा है...' : 'Syncing with server...')
+                  : (language === 'mr' ? 'ऑफलाइन उपलब्ध • स्थानिक कॅश' : language === 'hi' ? 'ऑफलाइन सुरक्षित • स्थानीय कैश' : 'Offline ready • Local storage')}
+              </Text>
+            </View>
             <VoiceGuidanceButton
-              textToSpeak={VoiceGuidanceService.getScript('CHECKLIST_NEXT', language)}
+              textToSpeak={
+                language === 'mr'
+                  ? 'महाराष्ट्र इमारत व इतर बांधकाम कामगार नोंदणीसाठी फॉर्म-५, आधार कार्ड, रहिवासी दाखला व बँक पासबुक आवश्यक आहे.'
+                  : language === 'hi'
+                  ? 'महाराष्ट्र निर्माण श्रमिक पंजीकरण हेतु फॉर्म-५, आधार कार्ड, निवास प्रमाण एवं बैंक पासबुक आवश्यक है।'
+                  : 'Form-V certificate, Aadhaar card, residence proof, and bank passbook are required for registration.'
+              }
               language={language}
-              label={language === 'mr' ? '🔊 कागदपत्र मार्गदर्शन ऐका' : '🔊 Listen to Document Guidance'}
             />
           </View>
         </View>
 
-        {/* Offline / Synchronization Status Banner */}
-        <View style={styles.syncBannerContainer}>
-          {pendingCount > 0 ? (
-            <View style={styles.pendingSyncBanner}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pendingSyncTitle}>
-                  ⏳ {pendingCount} बदल स्थानिक सेव्ह (सिंक बाकी)
-                </Text>
-                <Text style={styles.pendingSyncSub}>
-                  इंटरनेट चालू होताच बदल आपोआप सर्व्हरवर सिंक होतील.
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.syncNowBtn}
-                onPress={performSync}
-                disabled={syncing}
-              >
-                {syncing ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.syncNowBtnText}>आता सिंक करा</Text>
-                )}
-              </TouchableOpacity>
+        {/* Form-V Highlight Banner */}
+        <TouchableOpacity
+          style={styles.formVCalloutCard}
+          onPress={() => router.push('/form-v')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.formVIconBox}>
+            <Ionicons name="document-attach" size={24} color="#FFFFFF" />
+          </View>
+          <View style={styles.formVTextCol}>
+            <View style={styles.formVTagRow}>
+              <Text style={styles.formVTagText}>{language === 'mr' ? 'विशेष सहाय्य' : language === 'hi' ? 'विशेष सहायता' : 'Essential Tool'}</Text>
             </View>
-          ) : cacheState?.syncStatus === 'OFFLINE' ? (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineBannerText}>
-                📶 ऑफलाइन मोड • स्थानिक पातळीवर जतन केलेली कागदपत्रे दिसत आहेत.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.syncedBanner}>
-              <Text style={styles.syncedBannerText}>
-                ✓ सर्व्हरवर अद्ययावत{' '}
-                {cacheState?.lastSyncedAt
-                  ? `(शेवटचे सिंक: ${new Date(cacheState.lastSyncedAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })})`
-                  : ''}
-              </Text>
-              <TouchableOpacity onPress={performSync} disabled={syncing}>
-                <Text style={styles.syncRefreshLink}>
-                  {syncing ? 'सिंक होत आहे...' : 'ताजे करा ↻'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            <Text style={styles.formVCardTitle}>
+              {language === 'mr' ? 'फॉर्म-५ जनरेटर (९० दिवस काम प्रमाणपत्र)' : language === 'hi' ? 'फॉर्म-५ जनरेटर (९० दिन कार्य प्रमाण पत्र)' : 'Form-V 90-Day Work Certificate Generator'}
+            </Text>
+            <Text style={styles.formVCardSub}>
+              {language === 'mr' ? 'कंत्राटदाराकडे देण्यासाठी अर्ज किंवा प्रमाणपत्र एका क्लिकवर तयार करा' : language === 'hi' ? 'ठेकेदार हेतु आवेदन या प्रमाण पत्र एक क्लिक में बनाएं' : 'Generate official PDF certificate or contractor request letter'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.accentSaffronDark} />
+        </TouchableOpacity>
+
+        {/* Filter Tabs */}
+        <View style={styles.filterTabsRow}>
+          <TouchableOpacity
+            style={[styles.filterTab, activeFilter === 'ALL' && styles.filterTabActive]}
+            onPress={() => setActiveFilter('ALL')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterTabText, activeFilter === 'ALL' && styles.filterTabTextActive]}>
+              {language === 'mr' ? 'सर्व' : language === 'hi' ? 'सभी' : 'All'} ({items.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, activeFilter === 'AVAILABLE' && styles.filterTabActive]}
+            onPress={() => setActiveFilter('AVAILABLE')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterTabText, activeFilter === 'AVAILABLE' && styles.filterTabTextActive]}>
+              {language === 'mr' ? 'तयार' : language === 'hi' ? 'तैयार' : 'Ready'} ({availableCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, activeFilter === 'PENDING' && styles.filterTabActive]}
+            onPress={() => setActiveFilter('PENDING')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterTabText, activeFilter === 'PENDING' && styles.filterTabTextActive]}>
+              {language === 'mr' ? 'बाकी' : language === 'hi' ? 'शेष' : 'Pending'} ({pendingCount})
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Preparation Progress Bar */}
-        <View style={styles.progressHero}>
-          <View style={styles.progressHeaderRow}>
-            <View>
-              <Text style={styles.progressHeroLabel}>{t('preparationProgress')}</Text>
-              <Text style={styles.progressHeroSub}>
-                {items.filter((i) => i.status === 'AVAILABLE').length} of {items.length} Ready
-              </Text>
-            </View>
-            <Text style={styles.progressPercentText}>{progressPercent}%</Text>
-          </View>
-
-          <View style={styles.progressBarTrack}>
-            <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-          </View>
-        </View>
-
-        {/* Document Cards List */}
-        {loading && items.length === 0 ? (
-          <View style={styles.loaderBox}>
-            <ActivityIndicator size="large" color={Colors.constructionOrange} />
-            <Text style={styles.loaderText}>{t('loading')}</Text>
-          </View>
+        {/* Document Rows */}
+        {loading ? (
+          <ActivityIndicator size="large" color={Colors.accentSaffron} style={{ marginTop: 24 }} />
         ) : (
-          <View style={styles.itemsList}>
-            {items.map((item) => {
-              const badge = getStatusBadge(item.status);
-              const isExpanded = expandedId === item.id;
+          <View style={styles.documentList}>
+            {filteredItems.map((item) => {
               const req = item.requirement;
-              const titleText = req?.title
-                ? (req.title as any)[language] || req.title.en
-                : item.requirementId;
-              const descText = req?.description
-                ? (req.description as any)[language] || req.description.en
-                : '';
-              const alts = req?.acceptedAlternatives
-                ? (req.acceptedAlternatives as any)[language] || req.acceptedAlternatives.en || []
-                : [];
-
-              const hasPendingLocalUpdate = Boolean(cacheState?.pendingUpdates?.[item.id]);
+              const title = req?.title?.[language] || req?.title?.en || item.requirementId;
+              const desc = req?.description?.[language] || req?.description?.en || '';
+              const alts = req?.acceptedAlternatives?.[language] || req?.acceptedAlternatives?.en || [];
+              const isFormV = item.requirementId.includes('90-days');
 
               return (
-                <View key={item.id} style={styles.docCard}>
-                  {/* Card Header Row */}
-                  <View style={styles.cardHeader}>
-                    <View style={styles.titleCol}>
-                      <View style={styles.titleBadgeRow}>
-                        <Text style={styles.docTitle}>{titleText}</Text>
-                        {hasPendingLocalUpdate && (
-                          <View style={styles.pendingDotBadge}>
-                            <Text style={styles.pendingDotText}>स्थानिक सेव्ह</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.docDesc}>{descText}</Text>
-                    </View>
-
-                    {/* Status Badge & Edit Trigger */}
-                    <TouchableOpacity
-                      onPress={() => handleOpenStatusModal(item)}
-                      style={[styles.statusBadge, { backgroundColor: badge.bg }]}
-                    >
-                      <Text style={[styles.statusBadgeText, { color: badge.color }]}>
-                        {badge.label} ▾
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Special Form-V Generator Entry Point */}
-                  {req?.documentKey === 'DOC_90_DAYS_CERT' && (
-                    <View style={styles.formVActionBox}>
-                      <View style={{ flex: 1, marginRight: 10 }}>
-                        <Text style={styles.formVActionTitle}>
-                          📄 ९० दिवस कामाचा दाखला (फॉर्म-५) तयार करा
-                        </Text>
-                        <Text style={styles.formVActionSub}>
-                          कंत्राटदाराकडे सही-शिक्क्यासाठी अर्ज किंवा अधिकृत नमुना PDF मध्ये लगेच बनवा.
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.formVLaunchBtn}
-                        onPress={() => router.push('/form-v')}
-                      >
-                        <Text style={styles.formVLaunchBtnText}>तयार करा →</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {req?.reviewStatus === 'PROVISIONAL' && (
-                    <View style={styles.provisionalWarningBox}>
-                      <Text style={styles.provisionalWarningText}>
-                        ⚠️{' '}
-                        {language === 'mr'
-                          ? 'पडताळणी आवश्यक • हा निकष सर्व कामगारांसाठी बंधनकारक नाही'
-                          : language === 'hi'
-                          ? 'सत्यापन आवश्यक • यह शर्त सभी श्रमिकों पर अनिवार्य नहीं है'
-                          : 'Needs Verification • Applicability varies by site jurisdiction'}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* User Notes Preview if present */}
-                  {item.userNotes ? (
-                    <View style={styles.notesBox}>
-                      <Text style={styles.notesLabel}>Note / टीप:</Text>
-                      <Text style={styles.notesText}>{item.userNotes}</Text>
-                    </View>
-                  ) : null}
-
-                  {/* Expand / Collapse Toggle */}
-                  <TouchableOpacity
-                    onPress={() => setExpandedId(isExpanded ? null : item.id)}
-                    style={styles.expandToggle}
-                  >
-                    <Text style={styles.expandToggleText}>
-                      {isExpanded ? 'तपशील लपवा ▲' : 'पर्यायी कागदपत्रे व माहिती पहा ▼'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Expanded Detail Panel */}
-                  {isExpanded && (
-                    <View style={styles.expandedContent}>
-                      {/* Accepted Alternatives */}
-                      <Text style={styles.altsHeader}>{t('alternativesLabel')}</Text>
-                      <View style={styles.altsList}>
-                        {alts.map((alt: string, aIdx: number) => (
-                          <View key={aIdx} style={styles.altRow}>
-                            <Text style={styles.altBullet}>•</Text>
-                            <Text style={styles.altText}>{alt}</Text>
-                          </View>
-                        ))}
-                      </View>
-
-                      {/* Official Download link if applicable */}
-                      {req?.formDownloadUrl ? (
-                        <TouchableOpacity
-                          onPress={() => Linking.openURL(req.formDownloadUrl!)}
-                          style={styles.downloadFormBtn}
-                        >
-                          <Text style={styles.downloadFormBtnText}>
-                            📥 Download Official Form-V PDF (mahabocw.in) ↗
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
-
-                      {/* Source Citation if present */}
-                      {(req as any)?.sourceCitation && (
-                        <SourceCitationCard citation={(req as any).sourceCitation} />
-                      )}
-
-                      {/* Quick Actions */}
-                      <View style={styles.quickActionRow}>
-                        <TouchableOpacity
-                          onPress={() => handleOpenStatusModal(item)}
-                          style={styles.quickEditBtn}
-                        >
-                          <Text style={styles.quickEditBtnText}>✏️ {t('editStatus')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
+                <DocumentRow
+                  key={item.id}
+                  id={item.id}
+                  title={title}
+                  description={desc}
+                  status={item.status}
+                  userNotes={item.userNotes}
+                  alternatives={alts}
+                  language={language}
+                  onToggleStatus={() => handleOpenStatusModal(item)}
+                  onPressFormV={isFormV ? () => router.push('/form-v') : undefined}
+                />
               );
             })}
           </View>
         )}
       </ScrollView>
 
-      {/* Edit Status Modal */}
+      {/* Interactive Status & Notes Modal */}
       <Modal
         visible={modalVisible}
         transparent
@@ -407,73 +273,111 @@ export default function DocumentsScreen() {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>{t('updateDocumentStatus')}</Text>
-            <Text style={styles.modalSub}>
-              {selectedItem?.requirement?.title
-                ? (selectedItem.requirement.title as any)[language] ||
-                  selectedItem.requirement.title.en
-                : ''}
-            </Text>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>{t('actionChangeStatus')}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={Colors.mutedSlate} />
+              </TouchableOpacity>
+            </View>
 
-            {/* Status Options */}
-            <View style={styles.statusOptions}>
-              {(['AVAILABLE', 'NEEDS_VERIFICATION', 'ACTION_REQUIRED', 'MISSING'] as DocumentStatus[]).map(
-                (st) => {
-                  const b = getStatusBadge(st);
-                  const isCurrent = selectedItem?.status === st;
+            {selectedItem && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalDocTitle}>
+                  {selectedItem.requirement?.title?.[language] || selectedItem.requirement?.title?.en}
+                </Text>
 
-                  return (
-                    <TouchableOpacity
-                      key={st}
-                      onPress={() => handleUpdateStatus(st)}
-                      style={[
-                        styles.statusOptionBtn,
-                        isCurrent && { borderColor: b.color, backgroundColor: b.bg },
-                      ]}
-                    >
-                      <View style={[styles.statusDot, { backgroundColor: b.color }]} />
-                      <Text
+                {/* Status Selection Buttons */}
+                <Text style={styles.modalSectionLabel}>
+                  {language === 'mr' ? 'सध्याची स्थिती निवडा:' : language === 'hi' ? 'वर्तमान स्थिति चुनें:' : 'Select Current Status:'}
+                </Text>
+
+                <View style={styles.statusButtonStack}>
+                  {[
+                    {
+                      status: 'AVAILABLE' as DocumentStatus,
+                      label: t('docAvailable'),
+                      icon: 'checkmark-circle' as const,
+                      color: Colors.success,
+                      bg: Colors.successSurface,
+                    },
+                    {
+                      status: 'NEEDS_VERIFICATION' as DocumentStatus,
+                      label: t('docNeedsVerification'),
+                      icon: 'help-circle' as const,
+                      color: Colors.warning,
+                      bg: Colors.warningSurface,
+                    },
+                    {
+                      status: 'ACTION_REQUIRED' as DocumentStatus,
+                      label: t('docActionRequired'),
+                      icon: 'alert-circle' as const,
+                      color: Colors.accentSaffronDark,
+                      bg: Colors.saffronOrangeLight,
+                    },
+                    {
+                      status: 'MISSING' as DocumentStatus,
+                      label: t('docMissing'),
+                      icon: 'close-circle' as const,
+                      color: Colors.mutedSlate,
+                      bg: Colors.borderSubtle,
+                    },
+                  ].map((s) => {
+                    const isSelected = selectedStatus === s.status;
+                    return (
+                      <TouchableOpacity
+                        key={s.status}
                         style={[
-                          styles.statusOptionText,
-                          isCurrent && { color: Colors.textPrimary, fontWeight: '700' },
+                          styles.statusOptionBtn,
+                          isSelected && { borderColor: s.color, backgroundColor: s.bg, borderWidth: 2 },
                         ]}
+                        onPress={() => setSelectedStatus(s.status)}
+                        activeOpacity={0.8}
                       >
-                        {b.label}
-                      </Text>
-                      {isCurrent && <Text style={{ color: b.color }}>✓</Text>}
-                    </TouchableOpacity>
-                  );
-                }
-              )}
-            </View>
+                        <Ionicons name={s.icon} size={20} color={s.color} />
+                        <Text style={[styles.statusOptionText, isSelected && { color: s.color, fontWeight: '700' }]}>
+                          {s.label}
+                        </Text>
+                        {isSelected && <Ionicons name="checkmark" size={18} color={s.color} style={{ marginLeft: 'auto' }} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-            {/* User Notes Input */}
-            <Text style={styles.notesInputLabel}>{t('addNotesOptional')}</Text>
-            <TextInput
-              style={styles.notesInput}
-              value={editingNotes}
-              onChangeText={setEditingNotes}
-              placeholder="उदा. आधार कार्ड झेरॉक्स प्रत तयार आहे, कंत्राटदाराशी बोलणे झाले आहे."
-              placeholderTextColor="#64748B"
-              multiline
-            />
+                {/* Personal User Notes */}
+                <Text style={styles.modalSectionLabel}>
+                  {language === 'mr' ? 'खाजगी टीप (उदा. कंत्राटदाराकडे मागितले आहे):' : language === 'hi' ? 'निजी टिप्पणी (उदा. ठेकेदार से मांगा गया है):' : 'Private Notes:'}
+                </Text>
+                <TextInput
+                  style={styles.modalNotesInput}
+                  value={editingNotes}
+                  onChangeText={setEditingNotes}
+                  placeholder={t('notesPlaceholder')}
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                  numberOfLines={3}
+                />
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={styles.modalCancelBtn}
-              >
-                <Text style={styles.modalCancelBtnText}>{t('cancel')}</Text>
-              </TouchableOpacity>
+                {/* Save and Cancel Actions */}
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => setModalVisible(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalCancelBtnText}>{t('cancel')}</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => handleUpdateStatus(selectedItem?.status || 'AVAILABLE')}
-                style={styles.modalSaveBtn}
-              >
-                <Text style={styles.modalSaveBtnText}>{t('save')}</Text>
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity
+                    style={styles.modalSaveBtn}
+                    onPress={handleSaveModal}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.modalSaveBtnText}>{t('save')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -486,434 +390,273 @@ export default function DocumentsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundWarm,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 110,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
   },
   titleSection: {
-    marginBottom: 12,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
   },
   screenTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    ...Typography.screenTitle,
+    color: Colors.primaryNavy,
     marginBottom: 4,
   },
   screenSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
+    color: Colors.mutedSlate,
   },
-  topFormVButton: {
-    backgroundColor: 'rgba(255, 107, 44, 0.15)',
+  progressCard: {
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.constructionOrange,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    borderColor: Colors.borderSubtle,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
   },
-  topFormVButtonText: {
-    color: Colors.constructionOrange,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  syncBannerContainer: {
-    marginBottom: 14,
-  },
-  pendingSyncBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#3B1A05',
-    borderWidth: 1,
-    borderColor: Colors.constructionOrange,
-    borderRadius: 10,
-    padding: 10,
-  },
-  pendingSyncTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FED7AA',
-  },
-  pendingSyncSub: {
-    fontSize: 11,
-    color: '#CBD5E1',
-    marginTop: 2,
-  },
-  syncNowBtn: {
-    backgroundColor: Colors.constructionOrange,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  syncNowBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  offlineBanner: {
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#475569',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  offlineBannerText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    textAlign: 'center',
-  },
-  syncedBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  syncedBannerText: {
-    fontSize: 11,
-    color: '#10B981',
-    fontWeight: '600',
-  },
-  syncRefreshLink: {
-    fontSize: 11,
-    color: Colors.primaryCobalt,
-    fontWeight: '600',
-  },
-  progressHero: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 16,
-  },
-  progressHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  progressHeroLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  progressHeroSub: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  progressPercentText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.constructionOrange,
-  },
-  progressBarTrack: {
-    height: 8,
-    backgroundColor: Colors.background,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: Colors.constructionOrange,
-    borderRadius: 4,
-  },
-  loaderBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  loaderText: {
-    marginTop: 10,
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  itemsList: {
-    gap: 12,
-  },
-  docCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cardHeader: {
+  progressCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
   },
-  titleCol: {
-    flex: 1,
-    marginRight: 10,
+  progressCardLabel: {
+    ...Typography.labelMedium,
+    fontSize: 12,
+    color: Colors.mutedSlate,
+    textTransform: 'uppercase',
   },
-  titleBadgeRow: {
+  progressCardNumber: {
+    ...Typography.sectionTitle,
+    fontSize: 16,
+    color: Colors.primaryNavy,
+    marginTop: 2,
+  },
+  progressBadge: {
+    backgroundColor: Colors.saffronOrangeLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  progressBadgeText: {
+    ...Typography.badgeText,
+    color: Colors.accentSaffronDark,
+    fontSize: 13,
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: Colors.borderSubtle,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    marginBottom: Spacing.sm,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.full,
+  },
+  syncRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Spacing.xs,
+  },
+  syncStatusLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 4,
   },
-  docTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+  syncDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.success,
   },
-  pendingDotBadge: {
-    backgroundColor: '#78350F',
-    borderRadius: 4,
+  syncStatusText: {
+    ...Typography.captionRegular,
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  formVCalloutCard: {
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.accentSaffron,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  formVIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.accentSaffron,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+  },
+  formVTextCol: {
+    flex: 1,
+  },
+  formVTagRow: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.saffronOrangeLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
-  },
-  pendingDotText: {
-    fontSize: 9,
-    color: '#FEF3C7',
-    fontWeight: '700',
-  },
-  docDesc: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 17,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  formVActionBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#0F1E36',
-    borderWidth: 1,
-    borderColor: '#1D3B6F',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  formVActionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#93C5FD',
-  },
-  formVActionSub: {
-    fontSize: 10,
-    color: '#CBD5E1',
-    marginTop: 2,
-    lineHeight: 14,
-  },
-  formVLaunchBtn: {
-    backgroundColor: Colors.primaryCobalt,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  formVLaunchBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  provisionalWarningBox: {
-    backgroundColor: 'rgba(234, 179, 8, 0.1)',
-    borderRadius: 6,
-    padding: 8,
-    marginTop: 10,
-  },
-  provisionalWarningText: {
-    fontSize: 11,
-    color: '#EAB308',
-    lineHeight: 15,
-  },
-  notesBox: {
-    backgroundColor: Colors.background,
-    borderRadius: 6,
-    padding: 8,
-    marginTop: 10,
-  },
-  notesLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    borderRadius: Radius.xs,
     marginBottom: 2,
   },
-  notesText: {
-    fontSize: 12,
-    color: Colors.textPrimary,
+  formVTagText: {
+    ...Typography.badgeText,
+    fontSize: 9,
+    color: Colors.accentSaffronDark,
   },
-  expandToggle: {
-    marginTop: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  formVCardTitle: {
+    ...Typography.cardTitle,
+    fontSize: 14,
+    color: Colors.primaryNavy,
   },
-  expandToggleText: {
+  formVCardSub: {
+    ...Typography.captionRegular,
     fontSize: 11,
-    color: Colors.primaryCobalt,
-    fontWeight: '600',
+    color: Colors.mutedSlate,
+    lineHeight: 15,
   },
-  expandedContent: {
-    marginTop: 10,
-  },
-  altsHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  altsList: {
-    marginBottom: 10,
-  },
-  altRow: {
+  filterTabsRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.md,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    marginBottom: Spacing.md,
   },
-  altBullet: {
-    color: Colors.textSecondary,
-    marginRight: 6,
-    fontSize: 12,
-  },
-  altText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
+  filterTab: {
     flex: 1,
-    lineHeight: 16,
-  },
-  downloadFormBtn: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 6,
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginBottom: 10,
+    alignItems: 'center',
+    borderRadius: Radius.sm,
   },
-  downloadFormBtnText: {
-    fontSize: 11,
-    color: Colors.primaryCobalt,
-    fontWeight: '600',
+  filterTabActive: {
+    backgroundColor: Colors.primaryNavy,
   },
-  quickActionRow: {
-    flexDirection: 'row',
-    marginTop: 6,
+  filterTabText: {
+    ...Typography.badgeText,
+    fontSize: 12,
+    color: Colors.mutedSlate,
   },
-  quickEditBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  filterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  quickEditBtnText: {
-    fontSize: 11,
-    color: Colors.textPrimary,
-    fontWeight: '600',
+  documentList: {
+    gap: Spacing.sm,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(16, 26, 58, 0.6)',
     justifyContent: 'flex-end',
   },
-  modalContainer: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  modalContent: {
+    backgroundColor: Colors.cardSurface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.lg,
+    maxHeight: '85%',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 4,
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  modalSub: {
+  modalHeaderTitle: {
+    ...Typography.sectionTitle,
+    color: Colors.primaryNavy,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalDocTitle: {
+    ...Typography.cardTitle,
+    fontSize: 16,
+    color: Colors.primaryNavy,
+    marginBottom: Spacing.md,
+  },
+  modalSectionLabel: {
+    ...Typography.labelMedium,
     fontSize: 13,
     color: Colors.textSecondary,
-    marginBottom: 16,
+    marginBottom: Spacing.xs,
   },
-  statusOptions: {
-    gap: 8,
-    marginBottom: 16,
+  statusButtonStack: {
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   statusOptionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 10,
-    padding: 12,
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 10,
+    backgroundColor: Colors.backgroundWarm,
+    gap: Spacing.sm,
+    minHeight: 46,
   },
   statusOptionText: {
-    flex: 1,
-    fontSize: 13,
-    color: Colors.textSecondary,
+    ...Typography.bodyRegular,
+    fontSize: 14,
+    color: Colors.textPrimary,
   },
-  notesInputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 6,
-  },
-  notesInput: {
-    backgroundColor: Colors.background,
-    borderRadius: 8,
+  modalNotesInput: {
+    backgroundColor: Colors.backgroundWarm,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 10,
-    fontSize: 13,
-    color: Colors.textPrimary,
-    height: 60,
-    marginBottom: 18,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    fontSize: 14,
+    color: Colors.primaryNavy,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    marginBottom: Spacing.lg,
   },
-  modalActions: {
+  modalActionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   modalCancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    alignItems: 'center',
+    minHeight: Spacing.touchTargetMin,
   },
   modalCancelBtnText: {
-    color: Colors.textSecondary,
+    ...Typography.buttonSecondary,
     fontSize: 14,
-    fontWeight: '600',
   },
   modalSaveBtn: {
-    flex: 1,
-    backgroundColor: Colors.primaryCobalt,
-    paddingVertical: 12,
-    borderRadius: 10,
+    flex: 2,
+    backgroundColor: Colors.accentSaffron,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
     alignItems: 'center',
+    minHeight: Spacing.touchTargetMin,
+    ...Shadows.sm,
   },
   modalSaveBtnText: {
+    ...Typography.buttonPrimary,
     color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: '700',
   },
 });

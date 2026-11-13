@@ -10,14 +10,19 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/theme/colors';
+import { Typography } from '../src/theme/typography';
+import { Spacing, Radius, Shadows } from '../src/theme/spacing';
 import { useApp } from '../src/context/AppContext';
 import { HeaderBar } from '../src/components/HeaderBar';
 import { BottomNav } from '../src/components/BottomNav';
+import { TaskCard } from '../src/components/TaskCard';
 import { ApiService } from '../src/services/api';
-import { JourneyStage, JourneyStatusSummary } from '@haq/shared';
+import { ApplicationTaskItem, JourneyStage, JourneyStatusSummary } from '@haq/shared';
 import { VoiceGuidanceButton } from '../src/components/VoiceGuidanceButton';
 import { VoiceGuidanceService } from '../src/services/voiceGuidance';
 
@@ -26,7 +31,9 @@ export default function JourneyScreen() {
   const { sessionId, t, language } = useApp();
 
   const [journey, setJourney] = useState<JourneyStatusSummary | null>(null);
+  const [tasks, setTasks] = useState<ApplicationTaskItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Evidence Modal state for Gated SUBMITTED stage
   const [evidenceModalVisible, setEvidenceModalVisible] = useState<boolean>(false);
@@ -36,17 +43,17 @@ export default function JourneyScreen() {
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadJourney();
+    loadJourneyAndTasks();
   }, [sessionId]);
 
-  const loadJourney = async () => {
+  const loadJourneyAndTasks = async () => {
     setLoading(true);
     try {
-      const data = await ApiService.getJourney(sessionId);
-      setJourney(data);
+      // 1. Load journey summary
+      const journeyData = await ApiService.getJourney(sessionId);
+      setJourney(journeyData);
     } catch (err) {
       console.warn('API getJourney failed, using default state:', err);
-      // Fallback default journey
       const defaultSummary: JourneyStatusSummary = {
         currentStage: 'DOCUMENT_PREPARATION',
         allowedTransitions: ['PORTAL_HANDOFF'],
@@ -79,18 +86,62 @@ export default function JourneyScreen() {
         },
       };
       setJourney(defaultSummary);
+    }
+
+    try {
+      // 2. Load application tasks
+      const taskList = await ApiService.getApplicationTasks(sessionId);
+      setTasks(taskList);
+    } catch {
+      // Fallback default tasks
+      setTasks([
+        {
+          id: 'task-1',
+          sessionId,
+          title: language === 'mr' ? 'फॉर्म-५ वर कंत्राटदाराची सही व शिक्का घेणे' : language === 'hi' ? 'फॉर्म-५ पर ठेकेदार के हस्ताक्षर व मुहर' : 'Obtain contractor signature on Form-V',
+          description: language === 'mr' ? 'साइट इन-चार्ज किंवा ग्रामसेवक यांच्याकडून ९० दिवस कामाचे प्रमाणपत्र प्रमाणित करून घ्या.' : 'Get 90-day work certificate signed by contractor or Gramsevak.',
+          status: 'IN_PROGRESS',
+          priority: 'HIGH',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'task-2',
+          sessionId,
+          title: language === 'mr' ? 'आधार कार्डशी बँक खाते जोडलेले असल्याची खात्री करा' : language === 'hi' ? 'बैंक खाते से आधार लिंक सुनिश्चित करें' : 'Verify bank account is linked to Aadhaar (DBT)',
+          description: language === 'mr' ? 'थेट बँक खात्यात सरकारी अनुदान मिळण्यासाठी DBT सक्रिय असणे आवश्यक आहे.' : 'DBT active account required for direct grant transfer.',
+          status: 'PENDING',
+          priority: 'MEDIUM',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'task-3',
+          sessionId,
+          title: language === 'mr' ? 'आपले सरकार केंद्रावर अर्ज सादर करणे' : language === 'hi' ? 'आपले सरकार केंद्र पर आवेदन जमा करें' : 'Submit files at Aaple Sarkar Kendra Swargate',
+          description: language === 'mr' ? 'कागदपत्रे तयार झाल्यावर पोचपावती पावती मिळवण्यासाठी केंद्राला भेट द्या.' : 'Visit Kendra with prepared files to receive official acknowledgment slip.',
+          status: 'PENDING',
+          priority: 'HIGH',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadJourneyAndTasks();
   };
 
   const handleAdvanceToPortalHandoff = async () => {
     try {
       await ApiService.recordJourneyEvent(sessionId, 'PORTAL_HANDOFF');
-      await loadJourney();
-    } catch (err: any) {
-      console.warn('Advance error:', err);
-      // Local advance
+      await loadJourneyAndTasks();
+    } catch {
       if (journey) {
         setJourney({
           ...journey,
@@ -102,9 +153,9 @@ export default function JourneyScreen() {
           },
           progressPercent: 60,
           whatToDoNext: {
-            en: 'Visit the official MAHABOCW portal (mahabocw.in) or Aaple Sarkar Kendra in Pune to submit your files.',
-            mr: 'अधिकृत MAHABOCW पोर्टल (mahabocw.in) किंवा पुण्यातील आपले सरकार केंद्रावर जाऊन अर्ज सादर करा.',
-            hi: 'आधिकारिक MAHABOCW पोर्टल या पुणे के आपले सरकार केंद्र पर जाकर आवेदन जमा करें।',
+            en: 'Visit the official MAHABOCW portal (mahabocw.in) or Aaple Sarkar Kendra in Swargate, Pune.',
+            mr: 'अधिकृत MAHABOCW पोर्टल (mahabocw.in) किंवा पुण्यातील स्वारगेट आपले सरकार केंद्रावर जाऊन अर्ज सादर करा.',
+            hi: 'आधिकारिक MAHABOCW पोर्टल या पुणे के स्वारगेट केंद्र पर जाकर आवेदन जमा करें।',
           },
         });
       }
@@ -113,7 +164,13 @@ export default function JourneyScreen() {
 
   const handleSubmitEvidence = async () => {
     if (!evidenceRef.trim() || evidenceRef.trim().length < 4) {
-      setEvidenceError('Please enter a valid receipt or registration token (min 4 characters).');
+      setEvidenceError(
+        language === 'mr'
+          ? 'कृपया योग्य पोचपावती किंवा टोकन क्रमांक प्रविष्ट करा (किमान ४ अक्षरे).'
+          : language === 'hi'
+          ? 'कृपया वैध पावती या टोकन संख्या दर्ज करें (न्यूनतम ४ अक्षर)।'
+          : 'Please enter a valid receipt or registration token (min 4 characters).'
+      );
       return;
     }
 
@@ -128,7 +185,8 @@ export default function JourneyScreen() {
         evidenceRef.trim()
       );
       setEvidenceModalVisible(false);
-      await loadJourney();
+      setEvidenceRef('');
+      await loadJourneyAndTasks();
     } catch (err: any) {
       setEvidenceError(err.message || 'Verification rejected by backend rules.');
     } finally {
@@ -136,264 +194,359 @@ export default function JourneyScreen() {
     }
   };
 
-  const stages: { stage: JourneyStage; label: string; desc: string; icon: string }[] = [
+  const handleToggleTask = async (task: ApplicationTaskItem) => {
+    const nextStatus = task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+    // Optimistic local update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t))
+    );
+
+    try {
+      await ApiService.updateApplicationTask({
+        taskId: task.id,
+        sessionId,
+        status: nextStatus,
+      });
+    } catch (err) {
+      console.warn('Failed to update task:', err);
+    }
+  };
+
+  const stages: { stage: JourneyStage; label: string; desc: string; icon: any }[] = [
     {
       stage: 'ELIGIBILITY_GUIDANCE',
       label: t('stage1'),
-      desc: 'Preliminary checks for age 18-60 and 90-day work qualification.',
-      icon: '📋',
+      desc: language === 'mr' ? '१८-६० वय व ९० दिवस कामाची तपासणी' : language === 'hi' ? '१८-६० आयु व ९० दिन कार्य जांच' : 'Age 18-60 and 90-day work qualification',
+      icon: 'shield-checkmark-outline',
     },
     {
       stage: 'DOCUMENT_PREPARATION',
       label: t('stage2'),
-      desc: 'Form-V certificate, identity proof, address proof, and photos.',
-      icon: '📑',
+      desc: language === 'mr' ? 'फॉर्म-५, आधार, रहिवासी दाखला व पासबुक' : language === 'hi' ? 'फॉर्म-५, आधार, निवास व पासबुक' : 'Form-V certificate, ID proof, photos',
+      icon: 'document-text-outline',
     },
     {
       stage: 'PORTAL_HANDOFF',
       label: t('stage3'),
-      desc: 'Ready to submit on official mahabocw.in portal or Pune Aaple Sarkar Kendra.',
-      icon: '🌐',
+      desc: language === 'mr' ? 'mahabocw.in किंवा आपले सरकार केंद्र' : language === 'hi' ? 'mahabocw.in या आपले सरकार केंद्र' : 'Official MAHABOCW portal / CSC Kendra',
+      icon: 'laptop-outline',
     },
     {
       stage: 'SUBMITTED',
       label: t('stage4'),
-      desc: 'Locked until official submission acknowledgement receipt is entered.',
-      icon: '📮',
+      desc: language === 'mr' ? 'अधिकृत पोचपावती क्रमांक नोंदवून पूर्ण' : language === 'hi' ? 'आधिकारिक पावती संख्या दर्ज करें' : 'Gated with official acknowledgment slip',
+      icon: 'checkmark-done-circle-outline',
     },
     {
       stage: 'OUTCOME_RECORDED',
       label: t('stage5'),
-      desc: 'BOCW smart card issuance and official welfare scheme activation.',
-      icon: '🎖️',
+      desc: language === 'mr' ? 'स्मार्ट कार्ड व योजनांचे थेट लाभ' : language === 'hi' ? 'स्मार्ट कार्ड व प्रत्यक्ष लाभ' : 'Smart card issued & benefits unlocked',
+      icon: 'ribbon-outline',
     },
   ];
-
-  const getStageBadge = (st: 'COMPLETED' | 'ACTIVE' | 'PENDING' | 'LOCKED') => {
-    switch (st) {
-      case 'COMPLETED':
-        return { label: t('stageStatusCompleted'), color: Colors.success, bg: Colors.successSurface };
-      case 'ACTIVE':
-        return { label: t('stageStatusActive'), color: Colors.constructionOrange, bg: Colors.constructionOrangeGlow };
-      case 'PENDING':
-        return { label: t('stageStatusPending'), color: Colors.primaryCobalt, bg: 'rgba(22, 119, 255, 0.15)' };
-      case 'LOCKED':
-      default:
-        return { label: t('stageStatusLocked'), color: Colors.textMuted, bg: 'rgba(100, 116, 139, 0.12)' };
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <HeaderBar />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Title */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      >
+        {/* Title Header */}
         <View style={styles.titleSection}>
           <Text style={styles.screenTitle}>{t('journeyTitle')}</Text>
           <Text style={styles.screenSubtitle}>{t('journeySubtitle')}</Text>
         </View>
 
-        {/* What Should I Do Next Card */}
+        {/* Milestone Summary Card */}
         {journey && (
-          <View style={styles.whatNextCard}>
-            <View style={styles.whatNextHeaderRow}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.whatNextTitle}>{t('whatNextCardTitle')}</Text>
+          <View style={styles.heroCard}>
+            <View style={styles.heroHeader}>
+              <View>
+                <Text style={styles.heroLabel}>{language === 'mr' ? 'सध्याचा नोंदणी टप्पा' : language === 'hi' ? 'वर्तमान पंजीकरण चरण' : 'CURRENT STAGE'}</Text>
+                <Text style={styles.heroStageName}>
+                  {journey.currentStage === 'ELIGIBILITY_GUIDANCE'
+                    ? t('stage1')
+                    : journey.currentStage === 'DOCUMENT_PREPARATION'
+                    ? t('stage2')
+                    : journey.currentStage === 'PORTAL_HANDOFF'
+                    ? t('stage3')
+                    : journey.currentStage === 'SUBMITTED'
+                    ? t('stage4')
+                    : t('stage5')}
+                </Text>
+              </View>
+              <View style={styles.progressPill}>
+                <Text style={styles.progressPillText}>{journey.progressPercent}%</Text>
+              </View>
             </View>
-            <Text style={styles.whatNextText}>
-              {journey.whatToDoNext[language] || journey.whatToDoNext.en}
-            </Text>
 
-            {/* Accessible Voice Guidance */}
-            <View style={{ marginTop: 10, marginBottom: 4 }}>
-              <VoiceGuidanceButton
-                textToSpeak={
-                  journey.whatToDoNext[language] ||
-                  VoiceGuidanceService.getScript('JOURNEY_STAGE', language)
-                }
-                language={language}
-                size="compact"
-                label={language === 'mr' ? '🔊 सूचना ऐका' : '🔊 Listen to Next Step'}
-              />
+            {/* Progress Bar */}
+            <View style={styles.progressBarTrack}>
+              <View style={[styles.progressBarFill, { width: `${Math.max(10, journey.progressPercent)}%` }]} />
             </View>
 
-            {/* Quick transition action button if on DOCUMENT_PREPARATION */}
+            {/* What to do next */}
+            {journey.whatToDoNext && (
+              <View style={styles.nextBox}>
+                <Ionicons name="compass" size={20} color={Colors.accentSaffron} style={{ marginTop: 2 }} />
+                <View style={styles.nextTextCol}>
+                  <Text style={styles.nextBoxLabel}>{t('whatNextCardTitle')}</Text>
+                  <Text style={styles.nextBoxContent}>
+                    {journey.whatToDoNext[language] || journey.whatToDoNext.en}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Stage Advancement Action Button */}
             {journey.currentStage === 'DOCUMENT_PREPARATION' && (
               <TouchableOpacity
+                style={styles.advanceBtn}
                 onPress={handleAdvanceToPortalHandoff}
-                style={styles.advanceStageBtn}
+                activeOpacity={0.88}
               >
-                <Text style={styles.advanceStageBtnText}>
-                  Ready for Submission / पोर्टल हँडऑफसाठी तयार →
+                <Text style={styles.advanceBtnText}>
+                  {language === 'mr' ? 'पोर्टल हँडऑफकडे जा' : language === 'hi' ? 'पोर्टल हैंडऑफ पर जाएं' : 'Proceed to Portal Handoff'} →
                 </Text>
               </TouchableOpacity>
             )}
 
-            {/* If on PORTAL_HANDOFF, show button to record official evidence */}
             {journey.currentStage === 'PORTAL_HANDOFF' && (
               <TouchableOpacity
+                style={styles.advanceBtn}
                 onPress={() => setEvidenceModalVisible(true)}
-                style={styles.recordEvidenceBtn}
+                activeOpacity={0.88}
               >
-                <Text style={styles.recordEvidenceBtnText}>
-                  📝 {t('recordSubmissionBtn')}
-                </Text>
+                <Text style={styles.advanceBtnText}>{t('recordSubmissionBtn')} →</Text>
               </TouchableOpacity>
             )}
           </View>
         )}
 
-        {/* Vertical Timeline */}
-        <View style={styles.timelineSection}>
+        {/* 5-Stage Visual Timeline */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>{language === 'mr' ? 'नोंदणीचे ५ महत्त्वाचे टप्पे' : language === 'hi' ? 'पंजीकरण के ५ मुख्य चरण' : '5-Stage Registration Roadmap'}</Text>
+        </View>
+
+        <View style={styles.timelineCard}>
           {stages.map((st, idx) => {
-            const statusKey = journey?.stageStatuses[st.stage] || 'LOCKED';
-            const badge = getStageBadge(statusKey);
-            const isLast = idx === stages.length - 1;
+            const status = journey?.stageStatuses?.[st.stage] || 'PENDING';
+            const isCompleted = status === 'COMPLETED';
+            const isActive = status === 'ACTIVE';
+            const isLocked = status === 'LOCKED';
 
             return (
-              <View key={st.stage} style={styles.timelineStepContainer}>
-                {/* Timeline Icon & Line Column */}
-                <View style={styles.timelineVisualCol}>
+              <View key={st.stage} style={styles.timelineRow}>
+                {/* Left indicator column */}
+                <View style={styles.timelineIndicatorCol}>
                   <View
                     style={[
-                      styles.stepCircle,
-                      statusKey === 'COMPLETED' && styles.stepCircleCompleted,
-                      statusKey === 'ACTIVE' && styles.stepCircleActive,
-                      statusKey === 'LOCKED' && styles.stepCircleLocked,
+                      styles.timelineDot,
+                      isCompleted && styles.timelineDotCompleted,
+                      isActive && styles.timelineDotActive,
+                      isLocked && styles.timelineDotLocked,
                     ]}
                   >
-                    <Text style={styles.stepCircleIcon}>{st.icon}</Text>
+                    <Ionicons
+                      name={isCompleted ? 'checkmark' : st.icon}
+                      size={16}
+                      color={isCompleted || isActive ? '#FFFFFF' : Colors.mutedSlate}
+                    />
                   </View>
-                  {!isLast && (
+                  {idx < stages.length - 1 && (
                     <View
                       style={[
-                        styles.stepConnectingLine,
-                        statusKey === 'COMPLETED' && styles.stepConnectingLineCompleted,
+                        styles.timelineConnector,
+                        isCompleted && styles.timelineConnectorCompleted,
                       ]}
                     />
                   )}
                 </View>
 
-                {/* Timeline Content Card */}
-                <View
-                  style={[
-                    styles.stepCard,
-                    statusKey === 'ACTIVE' && styles.stepCardActive,
-                    statusKey === 'LOCKED' && styles.stepCardLocked,
-                  ]}
-                >
-                  <View style={styles.stepHeaderRow}>
-                    <Text style={styles.stepLabel}>{st.label}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.statusBadgeText, { color: badge.color }]}>
-                        {badge.label}
+                {/* Right content column */}
+                <View style={[styles.timelineContent, isActive && styles.timelineContentActive]}>
+                  <View style={styles.timelineHeaderRow}>
+                    <Text style={[styles.timelineStageTitle, isActive && styles.timelineStageTitleActive]}>
+                      {idx + 1}. {st.label}
+                    </Text>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        isCompleted && styles.statusPillCompleted,
+                        isActive && styles.statusPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          isCompleted && styles.statusPillTextCompleted,
+                          isActive && styles.statusPillTextActive,
+                        ]}
+                      >
+                        {isCompleted
+                          ? t('stageStatusCompleted')
+                          : isActive
+                          ? t('stageStatusActive')
+                          : isLocked
+                          ? t('stageStatusLocked')
+                          : t('stageStatusPending')}
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.stepDesc}>{st.desc}</Text>
-
-                  {/* Submission Evidence details if already recorded */}
-                  {st.stage === 'SUBMITTED' &&
-                    journey?.events.some((e) => e.eventType === 'SUBMITTED') && (
-                      <View style={styles.evidenceRecordedBox}>
-                        <Text style={styles.evidenceRecordedLabel}>Verified Slip Reference:</Text>
-                        <Text style={styles.evidenceRecordedVal}>
-                          {journey.events.find((e) => e.eventType === 'SUBMITTED')?.evidenceReference ||
-                            'MH-BOCW-PUN-ACK-8849'}
-                        </Text>
-                      </View>
-                    )}
+                  <Text style={styles.timelineStageDesc}>{st.desc}</Text>
                 </View>
               </View>
             );
           })}
         </View>
 
-        {/* Official Portal External Link Card */}
-        <View style={styles.officialPortalCard}>
-          <View style={styles.officialPortalHeader}>
-            <View style={styles.govEmblem}>
-              <Text style={styles.govEmblemText}>🏛️</Text>
-            </View>
-            <View style={styles.govTextCol}>
-              <Text style={styles.govTitle}>{t('officialPortalTitle')}</Text>
-              <Text style={styles.govUrl}>https://mahabocw.in</Text>
-            </View>
+        {/* Application Tasks Section */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>{language === 'mr' ? 'महत्त्वाची आवश्यक कामे' : language === 'hi' ? 'आवश्यक कार्य सूची' : 'Actionable Application Tasks'}</Text>
+          <Text style={styles.sectionSubtitle}>
+            {language === 'mr' ? 'पूर्ण झाल्यावर टिक मार्क करा' : language === 'hi' ? 'पूर्ण होने पर टिक करें' : 'Check off items as completed'}
+          </Text>
+        </View>
+
+        <View style={styles.tasksContainer}>
+          {tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              id={task.id}
+              title={task.title}
+              description={task.description}
+              status={task.status}
+              priority={task.priority}
+              language={language}
+              onToggleStatus={() => handleToggleTask(task)}
+            />
+          ))}
+        </View>
+
+        {/* Official MAHABOCW Portal & Swargate Assistance Box */}
+        <View style={styles.supportCard}>
+          <View style={styles.supportHeaderRow}>
+            <Ionicons name="business" size={24} color={Colors.primaryNavy} />
+            <Text style={styles.supportTitle}>{t('humanSupportTitle')}</Text>
           </View>
-          <Text style={styles.govDesc}>{t('officialPortalDesc')}</Text>
+          <Text style={styles.supportAddress}>{t('humanSupportOffice')}</Text>
 
           <TouchableOpacity
-            onPress={() => Linking.openURL('https://mahabocw.in/en/home/')}
-            style={styles.openGovBtn}
-            accessibilityRole="link"
+            style={styles.helplineBtn}
+            onPress={() => Linking.openURL('tel:18008892816')}
+            activeOpacity={0.8}
           >
-            <Text style={styles.openGovBtnText}>{t('openPortalBtn')} ↗</Text>
+            <Ionicons name="call" size={18} color="#FFFFFF" />
+            <Text style={styles.helplineBtnText}>{t('humanSupportHelpline')}</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Physical Assistance & Helpline Card */}
-        <View style={styles.supportCard}>
-          <Text style={styles.supportCardTitle}>📍 {t('humanSupportTitle')}</Text>
-          <Text style={styles.supportOfficeText}>{t('humanSupportOffice')}</Text>
-          <View style={styles.helplineRow}>
-            <Text style={styles.helplinePhoneIcon}>📞</Text>
-            <Text style={styles.helplineText}>{t('humanSupportHelpline')}</Text>
-          </View>
-        </View>
-
-        {/* Gating Disclaimer Card */}
-        <View style={styles.gatingNoticeCard}>
-          <Text style={styles.gatingNoticeTitle}>⚖️ {t('gatingNoteTitle')}</Text>
-          <Text style={styles.gatingNoticeDesc}>{t('gatingNoteDesc')}</Text>
+          <TouchableOpacity
+            style={styles.portalBtn}
+            onPress={() => Linking.openURL('https://mahabocw.in')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="globe-outline" size={18} color={Colors.primaryNavy} />
+            <Text style={styles.portalBtnText}>{t('openPortalBtn')} (mahabocw.in) →</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* EVIDENCE SUBMISSION MODAL */}
-      <Modal visible={evidenceModalVisible} transparent animationType="slide">
+      {/* Evidence Submission Modal for Gated SUBMITTED stage */}
+      <Modal
+        visible={evidenceModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEvidenceModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>{t('evidenceModalTitle')}</Text>
-            <Text style={styles.modalSub}>
-              Enter your official government acknowledgement receipt or Aaple Sarkar application number.
-            </Text>
-
-            {evidenceError && (
-              <View style={styles.modalErrorBox}>
-                <Text style={styles.modalErrorText}>{evidenceError}</Text>
-              </View>
-            )}
-
-            <Text style={styles.inputFieldLabel}>{t('evidenceRefLabel')}</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              value={evidenceRef}
-              onChangeText={setEvidenceRef}
-              placeholder={t('evidenceRefPlaceholder')}
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="characters"
-            />
-
-            <View style={styles.modalBtnRow}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>{t('evidenceModalTitle')}</Text>
               <TouchableOpacity
                 onPress={() => setEvidenceModalVisible(false)}
-                style={styles.modalCancelBtn}
+                style={styles.modalCloseBtn}
               >
-                <Text style={styles.modalCancelBtnText}>{t('cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleSubmitEvidence}
-                style={styles.modalSubmitBtn}
-                disabled={submittingEvidence}
-              >
-                {submittingEvidence ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSubmitBtnText}>{t('submitEvidenceBtn')}</Text>
-                )}
+                <Ionicons name="close" size={22} color={Colors.mutedSlate} />
               </TouchableOpacity>
             </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.gatingNotice}>
+                <Ionicons name="warning-outline" size={22} color={Colors.warning} />
+                <Text style={styles.gatingNoticeText}>{t('gatingNoteDesc')}</Text>
+              </View>
+
+              <Text style={styles.modalFieldLabel}>{t('evidenceTypeLabel')}</Text>
+              <View style={styles.evidenceTypeStack}>
+                {[
+                  { key: 'OFFICIAL_ACKNOWLEDGEMENT_SLIP', label: language === 'mr' ? 'अधिकृत सरकारी अर्ज पावती (Slip)' : 'Official Acknowledgement Slip' },
+                  { key: 'CSC_TOKEN', label: language === 'mr' ? 'आपले सरकार केंद्र टोकन पावती' : 'Aaple Sarkar Kendra / CSC Token' },
+                  { key: 'SEVA_KENDRA_RECEIPT', label: language === 'mr' ? 'कामगार सुविधा केंद्र पोचपावती' : 'Labor Seva Kendra Receipt' },
+                ].map((type) => (
+                  <TouchableOpacity
+                    key={type.key}
+                    style={[
+                      styles.evidenceTypeOption,
+                      evidenceType === type.key && styles.evidenceTypeOptionActive,
+                    ]}
+                    onPress={() => setEvidenceType(type.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.evidenceTypeOptionText,
+                        evidenceType === type.key && styles.evidenceTypeOptionTextActive,
+                      ]}
+                    >
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.modalFieldLabel}>{t('evidenceRefLabel')}</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={evidenceRef}
+                onChangeText={setEvidenceRef}
+                placeholder={t('evidenceRefPlaceholder')}
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="characters"
+              />
+
+              {evidenceError && (
+                <View style={styles.modalErrorBox}>
+                  <Ionicons name="alert-circle" size={16} color={Colors.error} />
+                  <Text style={styles.modalErrorText}>{evidenceError}</Text>
+                </View>
+              )}
+
+              <View style={styles.modalActionRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setEvidenceModalVisible(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalCancelBtnText}>{t('cancel')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalSubmitBtn}
+                  onPress={handleSubmitEvidence}
+                  disabled={submittingEvidence}
+                  activeOpacity={0.85}
+                >
+                  {submittingEvidence ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSubmitBtnText}>{t('submitEvidenceBtn')}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -406,371 +559,411 @@ export default function JourneyScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundWarm,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
   },
   titleSection: {
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   screenTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    ...Typography.screenTitle,
+    color: Colors.primaryNavy,
     marginBottom: 4,
   },
   screenSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
+    color: Colors.mutedSlate,
   },
-  whatNextCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.constructionOrange,
-    marginBottom: 20,
+  heroCard: {
+    backgroundColor: Colors.primaryNavy,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    ...Shadows.md,
   },
-  whatNextHeaderRow: {
+  heroHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
   },
-  pulseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.constructionOrange,
-  },
-  whatNextTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.constructionOrange,
+  heroLabel: {
+    ...Typography.badgeText,
+    fontSize: 10,
+    color: Colors.accentSaffron,
     letterSpacing: 0.5,
   },
-  whatNextText: {
-    fontSize: 14,
-    color: Colors.textPrimary,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  advanceStageBtn: {
-    backgroundColor: Colors.constructionOrange,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  advanceStageBtnText: {
+  heroStageName: {
+    ...Typography.sectionTitle,
+    fontSize: 18,
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    marginTop: 2,
   },
-  recordEvidenceBtn: {
-    backgroundColor: Colors.primaryCobalt,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
+  progressPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
   },
-  recordEvidenceBtnText: {
+  progressPillText: {
+    ...Typography.badgeText,
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
   },
-  timelineSection: {
-    marginBottom: 20,
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
   },
-  timelineStepContainer: {
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.full,
+  },
+  nextBox: {
     flexDirection: 'row',
-    gap: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  timelineVisualCol: {
+  nextTextCol: {
+    flex: 1,
+  },
+  nextBoxLabel: {
+    ...Typography.badgeText,
+    fontSize: 11,
+    color: Colors.accentSaffron,
+    marginBottom: 2,
+  },
+  nextBoxContent: {
+    ...Typography.bodyRegular,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#F3F4F6',
+  },
+  advanceBtn: {
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.md,
+    paddingVertical: 12,
     alignItems: 'center',
-    width: 36,
+    justifyContent: 'center',
   },
-  stepCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 2,
-    borderColor: Colors.border,
+  advanceBtnText: {
+    ...Typography.buttonPrimary,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  sectionHeaderRow: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  sectionTitle: {
+    ...Typography.sectionTitle,
+    color: Colors.primaryNavy,
+  },
+  sectionSubtitle: {
+    ...Typography.captionRegular,
+    color: Colors.mutedSlate,
+  },
+  timelineCard: {
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    marginBottom: Spacing.sm,
+  },
+  timelineIndicatorCol: {
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+    width: 32,
+  },
+  timelineDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.borderSubtle,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 2,
   },
-  stepCircleCompleted: {
-    borderColor: Colors.success,
-    backgroundColor: Colors.successSurface,
-  },
-  stepCircleActive: {
-    borderColor: Colors.constructionOrange,
-    backgroundColor: Colors.constructionOrangeGlow,
-  },
-  stepCircleLocked: {
-    borderColor: Colors.border,
-    opacity: 0.6,
-  },
-  stepCircleIcon: {
-    fontSize: 16,
-  },
-  stepConnectingLine: {
-    width: 2,
-    flex: 1,
-    minHeight: 40,
-    backgroundColor: Colors.border,
-    marginVertical: 4,
-  },
-  stepConnectingLineCompleted: {
+  timelineDotCompleted: {
     backgroundColor: Colors.success,
   },
-  stepCard: {
+  timelineDotActive: {
+    backgroundColor: Colors.accentSaffron,
+  },
+  timelineDotLocked: {
+    backgroundColor: Colors.borderSubtle,
+  },
+  timelineConnector: {
+    width: 2,
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 16,
+    backgroundColor: Colors.borderSubtle,
+    marginVertical: 4,
   },
-  stepCardActive: {
-    borderColor: Colors.constructionOrange,
+  timelineConnectorCompleted: {
+    backgroundColor: Colors.success,
   },
-  stepCardLocked: {
-    opacity: 0.6,
+  timelineContent: {
+    flex: 1,
+    paddingBottom: Spacing.sm,
   },
-  stepHeaderRow: {
+  timelineContentActive: {
+    backgroundColor: Colors.saffronOrangeLight,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+  },
+  timelineHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 2,
   },
-  stepLabel: {
-    fontSize: 15,
+  timelineStageTitle: {
+    ...Typography.cardTitle,
+    fontSize: 14,
+    color: Colors.primaryNavy,
+  },
+  timelineStageTitleActive: {
     fontWeight: '700',
-    color: Colors.textPrimary,
-    flex: 1,
+    color: Colors.primaryNavy,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  stepDesc: {
+  timelineStageDesc: {
+    ...Typography.captionRegular,
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: Colors.mutedSlate,
     lineHeight: 16,
   },
-  evidenceRecordedBox: {
-    backgroundColor: Colors.backgroundSecondary,
-    padding: 8,
-    borderRadius: 6,
-    marginTop: 8,
+  statusPill: {
+    backgroundColor: Colors.backgroundWarm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
   },
-  evidenceRecordedLabel: {
+  statusPillCompleted: {
+    backgroundColor: Colors.successSurface,
+  },
+  statusPillActive: {
+    backgroundColor: Colors.accentSaffron,
+  },
+  statusPillText: {
+    ...Typography.badgeText,
     fontSize: 10,
-    color: Colors.textMuted,
+    color: Colors.mutedSlate,
   },
-  evidenceRecordedVal: {
-    fontSize: 12,
+  statusPillTextCompleted: {
     color: Colors.success,
-    fontWeight: '700',
   },
-  officialPortalCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.borderHighlight,
-    marginBottom: 16,
-  },
-  officialPortalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 10,
-  },
-  govEmblem: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.backgroundSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  govEmblemText: {
-    fontSize: 20,
-  },
-  govTextCol: {
-    flex: 1,
-  },
-  govTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  govUrl: {
-    fontSize: 12,
-    color: Colors.primaryCobalt,
-  },
-  govDesc: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 17,
-    marginBottom: 12,
-  },
-  openGovBtn: {
-    backgroundColor: Colors.primaryCobalt,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  openGovBtnText: {
+  statusPillTextActive: {
     color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: '700',
+  },
+  tasksContainer: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   supportCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 16,
+    borderColor: Colors.borderSubtle,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+    ...Shadows.sm,
   },
-  supportCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  supportOfficeText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 17,
-    marginBottom: 10,
-  },
-  helplineRow: {
+  supportHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.backgroundSecondary,
-    padding: 10,
-    borderRadius: 8,
+    gap: Spacing.sm,
   },
-  helplinePhoneIcon: {
-    fontSize: 16,
+  supportTitle: {
+    ...Typography.sectionTitle,
+    fontSize: 15,
+    color: Colors.primaryNavy,
   },
-  helplineText: {
+  supportAddress: {
+    ...Typography.captionRegular,
     fontSize: 12,
-    color: Colors.textPrimary,
-    fontWeight: '600',
+    color: Colors.mutedSlate,
+    lineHeight: 17,
   },
-  gatingNoticeCard: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 14,
+  helplineBtn: {
+    backgroundColor: Colors.primaryNavy,
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  helplineBtnText: {
+    ...Typography.badgeText,
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  portalBtn: {
+    backgroundColor: Colors.backgroundWarm,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
   },
-  gatingNoticeTitle: {
+  portalBtnText: {
+    ...Typography.captionRegular,
+    fontWeight: '600',
+    color: Colors.primaryNavy,
     fontSize: 13,
-    fontWeight: '700',
-    color: Colors.warning,
-    marginBottom: 4,
-  },
-  gatingNoticeDesc: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    lineHeight: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(16, 26, 58, 0.6)',
     justifyContent: 'flex-end',
   },
-  modalSheet: {
-    backgroundColor: Colors.surfaceElevated,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 36,
+  modalContent: {
+    backgroundColor: Colors.cardSurface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.lg,
+    maxHeight: '85%',
   },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 4,
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  modalSub: {
+  modalHeaderTitle: {
+    ...Typography.sectionTitle,
+    color: Colors.primaryNavy,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  gatingNotice: {
+    flexDirection: 'row',
+    backgroundColor: Colors.warningSurface,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.warningBorder,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  gatingNoticeText: {
+    ...Typography.captionRegular,
     fontSize: 12,
-    color: Colors.textSecondary,
     lineHeight: 16,
-    marginBottom: 16,
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  modalFieldLabel: {
+    ...Typography.labelMedium,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  evidenceTypeStack: {
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  evidenceTypeOption: {
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.backgroundWarm,
+  },
+  evidenceTypeOptionActive: {
+    borderColor: Colors.accentSaffron,
+    backgroundColor: Colors.saffronOrangeLight,
+    borderWidth: 1.5,
+  },
+  evidenceTypeOptionText: {
+    ...Typography.bodyRegular,
+    fontSize: 13,
+    color: Colors.textPrimary,
+  },
+  evidenceTypeOptionTextActive: {
+    fontWeight: '700',
+    color: Colors.accentSaffronDark,
+  },
+  modalInput: {
+    backgroundColor: Colors.backgroundWarm,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.primaryNavy,
+    fontWeight: '700',
+    marginBottom: Spacing.md,
   },
   modalErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.errorSurface,
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.errorBorder,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   modalErrorText: {
+    ...Typography.captionRegular,
+    fontSize: 12,
     color: Colors.error,
-    fontSize: 12,
+    flex: 1,
   },
-  inputFieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 6,
-  },
-  modalTextInput: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.borderHighlight,
-    color: Colors.textPrimary,
-    padding: 14,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 18,
-  },
-  modalBtnRow: {
+  modalActionRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   modalCancelBtn: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
+    minHeight: Spacing.touchTargetMin,
   },
   modalCancelBtnText: {
-    color: Colors.textSecondary,
+    ...Typography.buttonSecondary,
     fontSize: 14,
-    fontWeight: '600',
   },
   modalSubmitBtn: {
-    flex: 1,
-    backgroundColor: Colors.constructionOrange,
-    paddingVertical: 12,
-    borderRadius: 10,
+    flex: 2,
+    backgroundColor: Colors.accentSaffron,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: Spacing.touchTargetMin,
+    ...Shadows.sm,
   },
   modalSubmitBtnText: {
+    ...Typography.buttonPrimary,
     color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: '700',
   },
 });

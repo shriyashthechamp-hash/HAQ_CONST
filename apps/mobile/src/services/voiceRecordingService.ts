@@ -175,3 +175,4 @@ export class VoiceRecordingService {
     return this.activeRecording !== null;
   }
 }
+

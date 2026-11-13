@@ -21,6 +21,13 @@ export const Typography = {
     color: Colors.textPrimary,
     letterSpacing: -0.2,
   },
+  screenHeader: {
+    fontSize: 22,
+    lineHeight: 30,
+    fontWeight: '700' as TextStyle['fontWeight'],
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
   sectionTitle: {
     fontSize: 18,
     lineHeight: 26,
@@ -28,6 +35,12 @@ export const Typography = {
     color: Colors.textPrimary,
   },
   cardTitle: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '600' as TextStyle['fontWeight'],
+    color: Colors.textPrimary,
+  },
+  cardHeader: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600' as TextStyle['fontWeight'],
@@ -67,6 +80,18 @@ export const Typography = {
     fontWeight: '400' as TextStyle['fontWeight'],
     color: Colors.textSecondary,
   },
+  captionRegular: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400' as TextStyle['fontWeight'],
+    color: Colors.textSecondary,
+  },
+  labelMedium: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600' as TextStyle['fontWeight'],
+    color: Colors.textPrimary,
+  },
   badgeText: {
     fontSize: 12,
     lineHeight: 16,
@@ -81,6 +106,12 @@ export const Typography = {
   },
 
   // Actions & Buttons
+  actionButton: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600' as TextStyle['fontWeight'],
+    color: Colors.textPrimary,
+  },
   buttonPrimary: {
     fontSize: 15,
     lineHeight: 20,
@@ -102,3 +133,4 @@ export const Typography = {
     textAlign: 'center' as TextStyle['textAlign'],
   },
 };
+

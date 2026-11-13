@@ -15,6 +15,13 @@ export const Colors = {
   warning: '#D78A24',             // Warm Amber
   error: '#C74B4B',               // Muted Red
 
+  // Modern Premium Aliases
+  primaryNavy: '#101A3A',
+  backgroundWarm: '#FAF8F3',
+  cardSurface: '#FFFFFF',
+  accentSaffron: '#F59A23',
+  accentSaffronDark: '#D47E11',
+
   // Named Palette Helpers
   midnightNavy: '#101A3A',
   midnightNavyLight: '#1E2F5E',

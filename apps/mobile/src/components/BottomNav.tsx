@@ -29,10 +29,17 @@ export const BottomNav: React.FC = () => {
       label: labels.home[language] || 'Home',
     },
     {
+      key: 'eligibility',
+      route: '/eligibility',
+      icon: 'shield-checkmark-outline' as const,
+      activeIcon: 'shield-checkmark' as const,
+      label: labels.eligibility[language] || 'Eligibility',
+    },
+    {
       key: 'assistant',
       route: '/assistant',
-      icon: 'chatbubbles-outline' as const,
-      activeIcon: 'chatbubbles' as const,
+      icon: 'mic-outline' as const,
+      activeIcon: 'mic' as const,
       label: labels.assistant[language] || 'Ask HAQ',
       isVoiceHighlight: true,
     },
@@ -81,10 +88,8 @@ export const BottomNav: React.FC = () => {
                 size={22}
                 color={
                   isActive
-                    ? Colors.accent
-                    : item.isVoiceHighlight
-                    ? Colors.primary
-                    : Colors.secondary
+                    ? (item.isVoiceHighlight ? '#FFFFFF' : Colors.accent)
+                    : (item.isVoiceHighlight ? '#FFFFFF' : Colors.secondary)
                 }
               />
             </View>
@@ -93,6 +98,7 @@ export const BottomNav: React.FC = () => {
                 styles.labelText,
                 isActive && styles.labelTextActive,
               ]}
+              numberOfLines={1}
             >
               {item.label}
             </Text>
@@ -110,17 +116,20 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingTop: Spacing.sm,
-    paddingBottom: Platform.OS === 'ios' ? 24 : Spacing.md,
+    alignItems: 'center',
+    paddingTop: Spacing.xs,
+    paddingBottom: Platform.OS === 'ios' ? 24 : Spacing.sm,
+    paddingHorizontal: Spacing.xs,
   },
   navButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 64,
+    flex: 1,
+    minHeight: 48,
   },
   iconWrapper: {
-    width: 40,
-    height: 36,
+    width: 36,
+    height: 32,
     borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -130,13 +139,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.saffronOrangeLight,
   },
   iconWrapperVoice: {
-    backgroundColor: Colors.warmIvory,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.accent,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    marginBottom: 0,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 4,
   },
   labelText: {
     ...Typography.tabLabel,
     color: Colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
   },
   labelTextActive: {
     color: Colors.textPrimary,
