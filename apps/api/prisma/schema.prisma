@@ -52,6 +52,8 @@ model Session {
   id                String                 @id @default(uuid())
   preferredLanguage Language               @default(mr)
   deviceInfo        String?
+  isRevoked         Boolean                @default(false)
+  revokedAt         DateTime?
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
@@ -59,8 +61,66 @@ model Session {
   checklistItems    DocumentChecklistItem[]
   journeyEvents     JourneyEvent[]
   messages          ConversationMessage[]
+  workerProfile     WorkerProfile?
+  applicationTasks  ApplicationTask[]
+  agentCheckpoints  AgentCheckpoint[]
 
   @@map("sessions")
+}
+
+model WorkerProfile {
+  id                      String    @id @default(uuid())
+  sessionId               String    @unique
+  session                 Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name                    String?
+  age                     Int?
+  state                   String    @default("Maharashtra")
+  district                String    @default("Pune")
+  occupation              String?
+  yearsOfConstructionWork Int?
+  isRegistered            Boolean   @default(false)
+  registrationNumber      String?
+  hasAadhaar              Boolean   @default(false)
+  hasBankPassbook         Boolean   @default(false)
+  has90DaysCertificate    Boolean   @default(false)
+  preferredLanguage       Language  @default(mr)
+  consentedAt             DateTime  @default(now())
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@map("worker_profiles")
+}
+
+model ApplicationTask {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  priority    String   @default("MEDIUM") // HIGH, MEDIUM, LOW
+  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, BLOCKED
+  dueCategory String?
+  actionKey   String?
+  userNotes   String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sessionId, status])
+  @@map("application_tasks")
+}
+
+model AgentCheckpoint {
+  id              String   @id @default(uuid())
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  checkpointType  String   // 'INTENT_ASSESSMENT', 'DOC_VERIFICATION', 'APPLICATION_APPROVAL'
+  statePayload    Json
+  requiresApproval Boolean  @default(false)
+  isApproved      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([sessionId, checkpointType])
+  @@map("agent_checkpoints")
 }
 
 model KnowledgeSource {

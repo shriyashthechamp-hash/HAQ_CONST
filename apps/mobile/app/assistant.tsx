@@ -18,7 +18,8 @@ import { HeaderBar } from '../src/components/HeaderBar';
 import { BottomNav } from '../src/components/BottomNav';
 import { SourceCitationCard } from '../src/components/SourceCitationCard';
 import { ApiService } from '../src/services/api';
-import { AssistantChatResponse, KnowledgeSourceCitation } from '@haq/shared';
+import { VoiceGuidanceService } from '../src/services/voiceGuidance';
+import { AgentResponse, KnowledgeSourceCitation, WorkerProfile } from '@haq/shared';
 
 interface Message {
   id: string;
@@ -26,6 +27,8 @@ interface Message {
   content: string;
   citations?: KnowledgeSourceCitation[];
   isDemoFallback?: boolean;
+  proposedActions?: any[];
+  audioBase64?: string;
 }
 
 export default function AssistantScreen() {
@@ -56,6 +59,11 @@ export default function AssistantScreen() {
   const [inputText, setInputText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // HAQ 2.0 Voice & Worker Profile State
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [voicePlayingId, setVoicePlayingId] = useState<string | null>(null);
+  const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
 
   // Draft Contractor Request Modal state
   const [draftModalVisible, setDraftModalVisible] = useState<boolean>(false);
@@ -107,19 +115,33 @@ export default function AssistantScreen() {
     setLoading(true);
 
     try {
-      const res: AssistantChatResponse = await ApiService.askAssistant(sessionId, text, language);
+      // Use HAQ 2.0 Agent Orchestrator with tool-calling and verified grounding
+      const res: AgentResponse = await ApiService.chatWithAgent({
+        sessionId,
+        message: text,
+        language,
+        voiceEnabled: true,
+      });
 
       const assistantMsg: Message = {
         id: `ast-${Date.now()}`,
         role: 'assistant',
-        content: res.reply,
+        content: res.message,
         citations: res.citations,
-        isDemoFallback: res.isDemoFallback,
+        proposedActions: res.proposedActions,
+        audioBase64: res.audioBase64,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
+
+      if (res.workerProfile) {
+        setWorkerProfile(res.workerProfile as any);
+      }
+
+      // Automatically speak the response using native Marathi/Hindi voice guidance
+      handleSpeakMessage(assistantMsg.id, res.message);
     } catch (err: any) {
-      console.warn('Groq Assistant API call failed, using reviewed KB fallback:', err);
+      console.warn('HAQ Agent API call failed, using reviewed KB fallback:', err);
 
       const fallbackReply =
         language === 'mr'
@@ -146,6 +168,39 @@ export default function AssistantScreen() {
       setMessages((prev) => [...prev, assistantMsg]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSpeakMessage = async (msgId: string, text: string) => {
+    if (voicePlayingId === msgId) {
+      await VoiceGuidanceService.stop();
+      setVoicePlayingId(null);
+      return;
+    }
+
+    setVoicePlayingId(msgId);
+    await VoiceGuidanceService.speak(text, language, {
+      onDone: () => setVoicePlayingId(null),
+      onError: () => setVoicePlayingId(null),
+    });
+  };
+
+  const handleVoicePushToTalk = () => {
+    if (isRecording) {
+      setIsRecording(false);
+      // Example spoken worker query triggered via push-to-talk
+      const sampleSpokenQuery =
+        language === 'mr'
+          ? 'मला माझ्या मुलांच्या शिक्षणासाठी सरकारी मदत मिळू शकते का?'
+          : language === 'hi'
+          ? 'क्या मुझे मेरे बच्चों की शिक्षा के लिए सरकारी सहायता मिल सकती है?'
+          : 'Can I get government scholarship aid for my children education?';
+      handleSendMessage(sampleSpokenQuery);
+    } else {
+      setIsRecording(true);
+      // Stop ongoing voice playback when worker begins speaking
+      VoiceGuidanceService.stop();
+      setVoicePlayingId(null);
     }
   };
 
@@ -285,6 +340,19 @@ export default function AssistantScreen() {
 
                 <Text style={styles.bubbleText}>{msg.content}</Text>
 
+                {/* Speaker playback button for assistant messages */}
+                {msg.role === 'assistant' && (
+                  <TouchableOpacity
+                    onPress={() => handleSpeakMessage(msg.id, msg.content)}
+                    style={styles.speakerRow}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.speakerIcon}>
+                      {voicePlayingId === msg.id ? '🔊 बोलत आहे (Stop)' : '🔈 ऐका (Listen)'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {/* Attached Citations */}
                 {msg.citations && msg.citations.length > 0 && (
                   <View style={styles.citationsContainer}>
@@ -305,14 +373,23 @@ export default function AssistantScreen() {
           )}
         </View>
 
-        {/* Input Bar */}
+        {/* Input Bar with Push-to-Talk Mic */}
         <View style={styles.inputContainer}>
+          <TouchableOpacity
+            onPress={handleVoicePushToTalk}
+            style={[styles.micButton, isRecording && styles.micButtonActive]}
+            activeOpacity={0.8}
+            accessibilityLabel="Push to talk"
+          >
+            <Text style={styles.micButtonIcon}>{isRecording ? '⏹️' : '🎙️'}</Text>
+          </TouchableOpacity>
+
           <TextInput
             style={styles.chatTextInput}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={t('assistantInputPlaceholder')}
-            placeholderTextColor={Colors.textMuted}
+            placeholder={isRecording ? 'ऐकत आहे... (Listening...)' : t('assistantInputPlaceholder')}
+            placeholderTextColor={isRecording ? Colors.constructionOrange : Colors.textMuted}
             onSubmitEditing={() => handleSendMessage()}
             returnKeyType="send"
           />
@@ -591,6 +668,21 @@ const styles = StyleSheet.create({
   citationsContainer: {
     marginTop: 10,
   },
+  speakerRow: {
+    marginTop: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  speakerIcon: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.constructionOrange,
+  },
   loadingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -606,8 +698,27 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 14,
+  },
+  micButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  micButtonActive: {
+    backgroundColor: Colors.constructionOrangeGlow,
+    borderColor: Colors.constructionOrange,
+    borderWidth: 2,
+  },
+  micButtonIcon: {
+    fontSize: 20,
   },
   chatTextInput: {
     flex: 1,

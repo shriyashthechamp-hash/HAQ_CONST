@@ -103,7 +103,7 @@ SOURCES:[{"sourceId":"MAHABOCW-SRC-xxx"}]`;
           },
         ],
         temperature: 0.2,
-        max_tokens: 800,
+        max_tokens: 450,
       });
 
       const rawResponse = completion.choices[0]?.message?.content || '';

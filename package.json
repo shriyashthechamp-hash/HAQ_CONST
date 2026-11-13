@@ -11,11 +11,13 @@
     "postinstall": "npm run build --workspace=@haq/shared",
     "eas-build-post-install": "npm run build --workspace=@haq/shared",
     "build": "npm run build --workspace=@haq/shared && npm run build --workspace=@haq/api",
+    "start:api": "npm run start --workspace=@haq/api",
     "dev:api": "npm run dev --workspace=@haq/api",
     "dev:mobile": "npm run start --workspace=@haq/mobile",
     "test": "npm run test --workspace=@haq/shared && npm run test --workspace=@haq/api",
     "prisma:generate": "npm run prisma:generate --workspace=@haq/api",
     "prisma:migrate": "npm run prisma:migrate --workspace=@haq/api",
+    "prisma:deploy": "npm run prisma:deploy --workspace=@haq/api",
     "prisma:seed": "npm run prisma:seed --workspace=@haq/api"
   },
   "devDependencies": {
