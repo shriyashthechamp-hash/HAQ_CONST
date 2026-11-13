@@ -103,3 +103,76 @@ export const FormVParamsSchema = z.object({
   issuePlace: z.string().default('पुणे (Pune)'),
   customNotes: z.string().max(500).optional(),
 });
+
+// ================= HAQ 2.0 AGENT & VOICE SCHEMAS =================
+
+export const ConsentCategorySchema = z.enum([
+  'PROFILE_STORAGE',
+  'DOCUMENT_ANALYSIS',
+  'VOICE_PROCESSING',
+  'SCHEME_ASSESSMENT',
+]);
+
+export const WorkerProfileSchema = z.object({
+  name: z.string().optional(),
+  age: z.number().min(18).max(100).optional(),
+  state: z.string().default('Maharashtra'),
+  district: z.string().default('Pune'),
+  occupation: z.string().optional(),
+  yearsOfConstructionWork: z.number().optional(),
+  isRegistered: z.boolean().default(false),
+  registrationNumber: z.string().optional(),
+  hasAadhaar: z.boolean().optional(),
+  hasBankPassbook: z.boolean().optional(),
+  has90DaysCertificate: z.boolean().optional(),
+  preferredLanguage: LanguageSchema.default('mr'),
+  consentedAt: z.string().datetime().optional(),
+});
+
+export const UpdateWorkerProfileSchema = z.object({
+  sessionId: z.string().min(1),
+  profile: WorkerProfileSchema.partial(),
+});
+
+export const AgentChatRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  message: z.string().min(1).max(2000),
+  language: LanguageSchema.optional(),
+  voiceEnabled: z.boolean().default(false),
+  audioInputUrl: z.string().optional(),
+});
+
+export const VoiceTranscribeRequestSchema = z.object({
+  audioBase64: z.string().min(1),
+  languageCode: z.enum(['mr-IN', 'hi-IN', 'en-IN']).default('mr-IN'),
+  model: z.string().optional(),
+});
+
+export const VoiceSynthesizeRequestSchema = z.object({
+  text: z.string().min(1).max(2500),
+  languageCode: z.enum(['mr-IN', 'hi-IN', 'en-IN']).default('mr-IN'),
+  speaker: z.string().optional(),
+});
+
+export const DocumentAnalysisRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  documentType: z.string().default('FORM_V'),
+  textContent: z.string().optional(),
+  fileBase64: z.string().optional(),
+  fileName: z.string().optional(),
+});
+
+export const CreateApplicationTaskSchema = z.object({
+  sessionId: z.string().min(1),
+  title: z.string().min(2).max(150),
+  description: z.string().max(500).optional(),
+  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).default('MEDIUM'),
+  dueCategory: z.string().optional(),
+  actionKey: z.string().optional(),
+});
+
+export const UpdateApplicationTaskSchema = z.object({
+  sessionId: z.string().min(1),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']),
+  userNotes: z.string().max(500).optional(),
+});

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Language } from '@haq/shared';
 import { TRANSLATIONS } from '../i18n/translations';
-import { ApiService, API_BASE_URL } from '../services/api';
+import { ApiService, API_BASE_URL, setSessionToken } from '../services/api';
 
 interface AppContextType {
   language: Language;
@@ -29,16 +29,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setLanguageState(storedLang);
         }
 
+        const storedToken = await AsyncStorage.getItem('@haq_session_token');
+        if (storedToken) {
+          setSessionToken(storedToken);
+        }
+
         const storedSession = await AsyncStorage.getItem('@haq_session_id');
         if (storedSession) {
           setSessionId(storedSession);
         } else {
           // Initialize a session
           try {
-            const res = await ApiService.createSession(storedLang as Language || 'mr');
+            const res = await ApiService.createSession((storedLang as Language) || 'mr');
             if (res && res.id) {
               setSessionId(res.id);
               await AsyncStorage.setItem('@haq_session_id', res.id);
+              if (res.token) {
+                await AsyncStorage.setItem('@haq_session_token', res.token);
+                setSessionToken(res.token);
+              }
               setIsBackendConnected(true);
             }
           } catch {
@@ -75,9 +84,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resetSession = async () => {
     try {
       await AsyncStorage.removeItem('@haq_session_id');
+      await AsyncStorage.removeItem('@haq_session_token');
       const newSession = await ApiService.createSession(language);
       setSessionId(newSession.id);
       await AsyncStorage.setItem('@haq_session_id', newSession.id);
+      if (newSession.token) {
+        await AsyncStorage.setItem('@haq_session_token', newSession.token);
+        setSessionToken(newSession.token);
+      }
     } catch {
       const fallbackId = `haq-${Date.now().toString(36)}`;
       setSessionId(fallbackId);

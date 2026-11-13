@@ -214,3 +214,66 @@ export interface CachedChecklistState {
   lastError: string | null;
 }
 
+// ================= HAQ 2.0 AGENT TYPES =================
+
+export interface WorkerProfile {
+  name?: string;
+  age?: number;
+  state: string;
+  district: string;
+  occupation?: string;
+  yearsOfConstructionWork?: number;
+  isRegistered: boolean;
+  registrationNumber?: string;
+  hasAadhaar?: boolean;
+  hasBankPassbook?: boolean;
+  has90DaysCertificate?: boolean;
+  preferredLanguage: Language;
+  consentedAt?: string;
+}
+
+export interface AgentActionProposal {
+  toolName: string;
+  parameters: Record<string, any>;
+  explanation: { en: string; mr: string; hi: string };
+  requiresExplicitApproval: boolean;
+  approved?: boolean;
+}
+
+export interface AgentResponse {
+  sessionId: string;
+  message: string;
+  language: Language;
+  citations: KnowledgeSourceCitation[];
+  suggestedFollowUps?: string[];
+  proposedActions?: AgentActionProposal[];
+  workerProfile?: Partial<WorkerProfile>;
+  audioUrl?: string;
+  audioBase64?: string;
+  audioFormat?: string;
+}
+
+export interface ApplicationTaskItem {
+  id: string;
+  sessionId: string;
+  title: string;
+  description?: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED';
+  dueCategory?: string;
+  actionKey?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentAnalysisResult {
+  documentType: string;
+  isReadable: boolean;
+  confidenceScore: number;
+  extractedFields: Record<string, string | number | boolean>;
+  matchedRequirements: string[];
+  missingElements: string[];
+  guidanceMessage: { en: string; mr: string; hi: string };
+  officialDisclaimer: string;
+}
+

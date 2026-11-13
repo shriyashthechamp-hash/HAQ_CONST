@@ -7,6 +7,7 @@ import { JourneyService } from '../src/services/journeyService';
 import { GroqAssistantService } from '../src/services/groqAssistantService';
 
 let testSessionId = '';
+let testSessionToken = '';
 
 describe('HAQ Backend — Automated Integration & Logic Tests', () => {
   beforeAll(async () => {
@@ -16,7 +17,9 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
       .send({ preferredLanguage: 'mr' });
     expect(res.status).toBe(201);
     expect(res.body.id).toBeDefined();
+    expect(res.body.token).toBeDefined();
     testSessionId = res.body.id;
+    testSessionToken = res.body.token;
   });
 
   afterAll(async () => {
@@ -83,18 +86,23 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
 
   describe('3. Document Checklist & Progress Calculation', () => {
     it('GET /api/documents/checklist/:sessionId returns populated checklist', async () => {
-      const res = await request(app).get(`/api/documents/checklist/${testSessionId}`);
+      const res = await request(app)
+        .get(`/api/documents/checklist/${testSessionId}`)
+        .set('Authorization', `Bearer ${testSessionToken}`);
       expect(res.status).toBe(200);
       expect(res.body.items.length).toBe(6);
       expect(typeof res.body.progressPercent).toBe('number');
     });
 
     it('PATCH /api/documents/:id updates item status and recalculates progress', async () => {
-      const initial = await request(app).get(`/api/documents/checklist/${testSessionId}`);
+      const initial = await request(app)
+        .get(`/api/documents/checklist/${testSessionId}`)
+        .set('Authorization', `Bearer ${testSessionToken}`);
       const firstItem = initial.body.items[0];
 
       const patchRes = await request(app)
         .patch(`/api/documents/${firstItem.id}`)
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           status: 'AVAILABLE',
@@ -105,29 +113,36 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
       expect(patchRes.body.status).toBe('AVAILABLE');
       expect(patchRes.body.userNotes).toContain('Signed by contractor');
 
-      const after = await request(app).get(`/api/documents/checklist/${testSessionId}`);
+      const after = await request(app)
+        .get(`/api/documents/checklist/${testSessionId}`)
+        .set('Authorization', `Bearer ${testSessionToken}`);
       expect(after.body.availableCount).toBeGreaterThanOrEqual(1);
     });
 
     it('PATCH /api/documents/:id rejects unauthorized session with 403 Forbidden', async () => {
-      const initial = await request(app).get(`/api/documents/checklist/${testSessionId}`);
+      const initial = await request(app)
+        .get(`/api/documents/checklist/${testSessionId}`)
+        .set('Authorization', `Bearer ${testSessionToken}`);
       const firstItem = initial.body.items[0];
 
       const unauthorizedRes = await request(app)
         .patch(`/api/documents/${firstItem.id}`)
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: 'different-hacker-session-id',
           status: 'MISSING',
         });
 
       expect(unauthorizedRes.status).toBe(403);
-      expect(unauthorizedRes.body.message).toContain('Session Access Denied');
+      expect(unauthorizedRes.body.message).toContain('Access denied');
     });
   });
 
   describe('4. Journey State Machine & Strict Submission Gating', () => {
     it('GET /api/journey/:sessionId returns initial ELIGIBILITY_GUIDANCE stage', async () => {
-      const res = await request(app).get(`/api/journey/${testSessionId}`);
+      const res = await request(app)
+        .get(`/api/journey/${testSessionId}`)
+        .set('Authorization', `Bearer ${testSessionToken}`);
       expect(res.status).toBe(200);
       expect(res.body.currentStage).toBe('ELIGIBILITY_GUIDANCE');
       expect(res.body.allowedTransitions).toContain('DOCUMENT_PREPARATION');
@@ -136,6 +151,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
     it('Allows transition to DOCUMENT_PREPARATION', async () => {
       const res = await request(app)
         .post('/api/journey/events')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           eventType: 'DOCUMENT_PREPARATION',
@@ -147,6 +163,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
       // Advance to PORTAL_HANDOFF first
       await request(app)
         .post('/api/journey/events')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           eventType: 'PORTAL_HANDOFF',
@@ -154,6 +171,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
 
       const res = await request(app)
         .post('/api/journey/events')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           eventType: 'SUBMITTED',
@@ -165,6 +183,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
     it('STRICT GATING: Rejects sample, demo, or placeholder receipt references', async () => {
       const sampleRes = await request(app)
         .post('/api/journey/events')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           eventType: 'SUBMITTED',
@@ -179,6 +198,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
       // Submit with verified evidence reference
       const submitRes = await request(app)
         .post('/api/journey/events')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           eventType: 'SUBMITTED',
@@ -194,6 +214,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
     it('STRICT GATING: Rejects OUTCOME_RECORDED with sample reference', async () => {
       const outcomeRes = await request(app)
         .post('/api/journey/events')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           eventType: 'OUTCOME_RECORDED',
@@ -208,6 +229,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
     it('POST /api/assistant/draft-request produces formal Marathi request', async () => {
       const res = await request(app)
         .post('/api/assistant/draft-request')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           workerName: 'रमेश जाधव',
@@ -228,6 +250,7 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
     it('POST /api/assistant/chat delivers grounded advice with verified citations', async () => {
       const res = await request(app)
         .post('/api/assistant/chat')
+        .set('Authorization', `Bearer ${testSessionToken}`)
         .send({
           sessionId: testSessionId,
           message: '९० दिवस कामाचे प्रमाणपत्र कसे मिळवायचे?',
@@ -240,6 +263,6 @@ describe('HAQ Backend — Automated Integration & Logic Tests', () => {
       expect(Array.isArray(res.body.citations)).toBe(true);
       expect(res.body.citations.length).toBeGreaterThanOrEqual(1);
       expect(res.body.citations[0]).toHaveProperty('sourceId');
-    });
+    }, 30000);
   });
 });
