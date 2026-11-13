@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,16 +9,26 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Alert,
+  Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/theme/colors';
+import { Typography } from '../src/theme/typography';
+import { Spacing, Radius, Shadows } from '../src/theme/spacing';
 import { useApp } from '../src/context/AppContext';
 import { HeaderBar } from '../src/components/HeaderBar';
 import { BottomNav } from '../src/components/BottomNav';
 import { SourceCitationCard } from '../src/components/SourceCitationCard';
+import { VoiceController } from '../src/components/VoiceController';
+import { VoiceReviewModal } from '../src/components/VoiceReviewModal';
+import { AudioPlayerBar } from '../src/components/AudioPlayerBar';
 import { ApiService } from '../src/services/api';
-import { VoiceGuidanceService } from '../src/services/voiceGuidance';
+import { VoiceRecordingService } from '../src/services/voiceRecordingService';
+import { VoicePlaybackService } from '../src/services/voicePlaybackService';
+import { VoiceState } from '../src/services/voiceStateMachine';
 import { AgentResponse, KnowledgeSourceCitation, WorkerProfile } from '@haq/shared';
 
 interface Message {
@@ -41,10 +51,10 @@ export default function AssistantScreen() {
       role: 'assistant',
       content:
         language === 'mr'
-          ? 'नमस्कार! मी **HAQ मदतनीस**. बांधकाम कामगारांच्या कल्याणकारी योजना, ९० दिवस कामाचे प्रमाणपत्र (फॉर्म-५) आणि आवश्यक कागदपत्रांबद्दल तुम्हाला काय माहिती हवी आहे?'
+          ? 'नमस्कार! मी **HAQ मदतनीस**. बांधकाम कामगारांच्या कल्याणकारी योजना, ९० दिवस कामाचे प्रमाणपत्र (फॉर्म-५) आणि आवश्यक कागदपत्रांबद्दल तुम्हाला काय माहिती हवी आहे? तुम्ही खालील माइक दाबून थेट बोलू शकता.'
           : language === 'hi'
-          ? 'नमस्ते! मैं **HAQ सहायक** हूँ। निर्माण श्रमिकों के कल्याणकारी लाभ, ९० दिन कार्य प्रमाण पत्र (फॉर्म-५) और आवश्यक दस्तावेजों के बारे में आप क्या जानना चाहते हैं?'
-          : 'Hello! I am **HAQ Assistant**. How can I help you regarding MAHABOCW construction worker benefits, 90-day certificates (Form-V), or required documents?',
+          ? 'नमस्ते! मैं **HAQ सहायक** हूँ। निर्माण श्रमिकों के कल्याणकारी लाभ, ९० दिन कार्य प्रमाण पत्र (फॉर्म-५) और आवश्यक दस्तावेजों के बारे में आप क्या जानना चाहते हैं? आप नीचे दिए माइक पर बोल भी सकते हैं।'
+          : 'Hello! I am **HAQ Assistant**. How can I help you regarding MAHABOCW construction worker benefits, 90-day certificates (Form-V), or required documents? You can tap the mic below to speak.',
       citations: [
         {
           sourceId: 'MAHABOCW-SRC-REG-01',
@@ -58,12 +68,13 @@ export default function AssistantScreen() {
 
   const [inputText, setInputText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [, setWorkerProfile] = useState<WorkerProfile | null>(null);
 
-  // HAQ 2.0 Voice & Worker Profile State
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [voicePlayingId, setVoicePlayingId] = useState<string | null>(null);
-  const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
+  // Real Native Voice State Machine
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [recordingDurationMs, setRecordingDurationMs] = useState<number>(0);
+  const [voiceTranscript, setVoiceTranscript] = useState<string>('');
+  const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(false);
 
   // Draft Contractor Request Modal state
   const [draftModalVisible, setDraftModalVisible] = useState<boolean>(false);
@@ -76,6 +87,14 @@ export default function AssistantScreen() {
   const [draftInstructions, setDraftInstructions] = useState<string | null>(null);
   const [draftLoading, setDraftLoading] = useState<boolean>(false);
   const [copiedNotice, setCopiedNotice] = useState<boolean>(false);
+
+  // Clean up recording/playback on screen unmount
+  useEffect(() => {
+    return () => {
+      VoiceRecordingService.cancelRecording();
+      VoicePlaybackService.stop();
+    };
+  }, []);
 
   const quickChips =
     language === 'mr'
@@ -103,7 +122,6 @@ export default function AssistantScreen() {
     const text = (textToSend || inputText).trim();
     if (!text || loading) return;
 
-    setErrorMsg(null);
     setInputText('');
 
     const userMsg: Message = {
@@ -114,8 +132,11 @@ export default function AssistantScreen() {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
+    // Stop ongoing speech when a new query is submitted
+    await VoicePlaybackService.stop();
+
     try {
-      // Use HAQ 2.0 Agent Orchestrator with tool-calling and verified grounding
+      // Authenticated HAQ 2.0 Agent Orchestrator with tool-calling and Sarvam TTS
       const res: AgentResponse = await ApiService.chatWithAgent({
         sessionId,
         message: text,
@@ -138,8 +159,15 @@ export default function AssistantScreen() {
         setWorkerProfile(res.workerProfile as any);
       }
 
-      // Automatically speak the response using native Marathi/Hindi voice guidance
-      handleSpeakMessage(assistantMsg.id, res.message);
+      // Automatically play genuine Sarvam bulbul:v3 audio if returned
+      if (res.audioBase64) {
+        VoicePlaybackService.playAudio({
+          id: assistantMsg.id,
+          audioBase64: res.audioBase64,
+          textFallback: res.message,
+          language,
+        });
+      }
     } catch (err: any) {
       console.warn('HAQ Agent API call failed, using reviewed KB fallback:', err);
 
@@ -171,38 +199,98 @@ export default function AssistantScreen() {
     }
   };
 
-  const handleSpeakMessage = async (msgId: string, text: string) => {
-    if (voicePlayingId === msgId) {
-      await VoiceGuidanceService.stop();
-      setVoicePlayingId(null);
-      return;
-    }
+  // --- Real Voice Handlers ---
 
-    setVoicePlayingId(msgId);
-    await VoiceGuidanceService.speak(text, language, {
-      onDone: () => setVoicePlayingId(null),
-      onError: () => setVoicePlayingId(null),
-    });
-  };
+  const handleStartVoiceRecording = async () => {
+    try {
+      await VoicePlaybackService.stop();
+      setVoiceState('recording');
+      setRecordingDurationMs(0);
 
-  const handleVoicePushToTalk = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      // Example spoken worker query triggered via push-to-talk
-      const sampleSpokenQuery =
-        language === 'mr'
-          ? 'मला माझ्या मुलांच्या शिक्षणासाठी सरकारी मदत मिळू शकते का?'
-          : language === 'hi'
-          ? 'क्या मुझे मेरे बच्चों की शिक्षा के लिए सरकारी सहायता मिल सकती है?'
-          : 'Can I get government scholarship aid for my children education?';
-      handleSendMessage(sampleSpokenQuery);
-    } else {
-      setIsRecording(true);
-      // Stop ongoing voice playback when worker begins speaking
-      VoiceGuidanceService.stop();
-      setVoicePlayingId(null);
+      await VoiceRecordingService.startRecording(({ durationMillis }) => {
+        setRecordingDurationMs(durationMillis);
+      });
+    } catch (err: any) {
+      console.warn('[AssistantScreen] Recording start failed:', err);
+      setVoiceState('idle');
+
+      if (err.message === 'MICROPHONE_PERMISSION_DENIED') {
+        Alert.alert(
+          language === 'mr' ? 'मायक्रोफोन परवानगी' : 'Microphone Permission',
+          language === 'mr'
+            ? 'आवाज नोंदवण्यासाठी कृपया ॲप सेटिंग्जमधून मायक्रोफोन परवानगी सुरू करा.'
+            : 'Please enable microphone access in settings to speak with HAQ.'
+        );
+      }
     }
   };
+
+  const handleStopVoiceRecording = async () => {
+    try {
+      setVoiceState('transcribing');
+      const recordingResult = await VoiceRecordingService.stopRecording();
+
+      const langCode = language === 'mr' ? 'mr-IN' : language === 'hi' ? 'hi-IN' : 'en-IN';
+      const transcribeRes = await ApiService.transcribeVoice({
+        audioBase64: recordingResult.audioBase64,
+        languageCode: langCode,
+      });
+
+      if (!transcribeRes.text || transcribeRes.text.trim() === '') {
+        Alert.alert(
+          language === 'mr' ? 'आवाज ऐकू आला नाही' : 'No Speech Detected',
+          language === 'mr'
+            ? 'कृपया मायक्रोफोनजवळ थोडे स्पष्ट आणि मोठ्याने बोला.'
+            : 'Please speak clearly near the microphone.'
+        );
+        setVoiceState('idle');
+        return;
+      }
+
+      setVoiceTranscript(transcribeRes.text);
+      setReviewModalVisible(true);
+      setVoiceState('reviewing_transcript');
+    } catch (err: any) {
+      console.warn('[AssistantScreen] Transcription error:', err);
+      setVoiceState('idle');
+
+      if (err.message === 'RECORDING_TOO_SHORT') {
+        Alert.alert(
+          language === 'mr' ? 'खूप कमी वेळ' : 'Recording Too Short',
+          language === 'mr'
+            ? 'बोलणे पूर्ण होईपर्यंत बटण दाबून ठेवा.'
+            : 'Please speak a little longer so HAQ can understand.'
+        );
+      } else {
+        Alert.alert(
+          language === 'mr' ? 'आवाज प्रक्रिया त्रुटी' : 'Voice Error',
+          language === 'mr'
+            ? 'आवाज समजण्यात अडचण आली. कृपया पुन्हा बोला किंवा टाइप करा.'
+            : 'Could not transcribe speech. Please try speaking again or type your query.'
+        );
+      }
+    }
+  };
+
+  const handleCancelVoiceRecording = async () => {
+    await VoiceRecordingService.cancelRecording();
+    setVoiceState('idle');
+    setRecordingDurationMs(0);
+  };
+
+  const handleConfirmTranscript = (finalText: string) => {
+    setReviewModalVisible(false);
+    setVoiceState('idle');
+    handleSendMessage(finalText);
+  };
+
+  const handleReRecordFromModal = () => {
+    setReviewModalVisible(false);
+    setVoiceTranscript('');
+    handleStartVoiceRecording();
+  };
+
+  // --- Contractor Request Draft Handlers ---
 
   const handleGenerateDraft = async () => {
     setDraftLoading(true);
@@ -220,7 +308,6 @@ export default function AssistantScreen() {
       setGeneratedDraft(res.draftText);
       setDraftInstructions(res.instructions);
     } catch {
-      // Local fallback template
       const fallbackDraft =
         language === 'mr'
           ? `प्रति,\nमाननीय ${draftContractorName},\n${draftSiteLocation}.\n\nविषय: MAHABOCW नोंदणीसाठी ९० दिवस कामाचे प्रमाणपत्र (फॉर्म-५) मिळण्याबाबत.\n\nमहोदय,\n\nमी, ${draftWorkerName}, आपल्या ${draftSiteLocation} येथील साइटवर ${draftTradeType} म्हणून काम केले आहे (${draftWorkDates}).\n\nशासकीय कामगार कल्याण योजनेसाठी मला ९० दिवस कामाचे प्रमाणपत्र (फॉर्म-५) आवश्यक आहे. कृपया स्वाक्षरी व शिक्का देऊन सहकार्य करावे.\n\nआपला नम्र,\n${draftWorkerName}`
@@ -252,42 +339,46 @@ export default function AssistantScreen() {
           <Text style={styles.screenSubtitle}>{t('assistantSubtitle')}</Text>
         </View>
 
-        {/* Action Header: Form-V PDF Generator & Contractor Letter */}
+        {/* Action Header: Form-V PDF Generator */}
         <TouchableOpacity
           onPress={() => router.push('/form-v')}
-          style={[styles.draftToolCard, { borderColor: Colors.constructionOrange, marginBottom: 10 }]}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.draftToolIconBox, { backgroundColor: 'rgba(255, 107, 44, 0.2)' }]}>
-            <Text style={styles.draftToolIcon}>📄</Text>
-          </View>
-          <View style={styles.draftToolTextCol}>
-            <Text style={[styles.draftToolTitle, { color: Colors.constructionOrange }]}>
-              फॉर्म-५ प्रमाणपत्र व PDF जनरेटर
-            </Text>
-            <Text style={styles.draftToolSub}>
-              MAHABOCW ९० दिवस काम प्रमाणपत्र थेट PDF मध्ये तयार व डाउनलोड करा
-            </Text>
-          </View>
-          <Text style={[styles.draftToolArrow, { color: Colors.constructionOrange }]}>→</Text>
-        </TouchableOpacity>
-
-        {/* Action Header Card: Contractor Draft Tool */}
-        <TouchableOpacity
-          onPress={() => setDraftModalVisible(true)}
           style={styles.draftToolCard}
           activeOpacity={0.85}
         >
           <View style={styles.draftToolIconBox}>
-            <Text style={styles.draftToolIcon}>✍️</Text>
+            <Ionicons name="document-text" size={20} color={Colors.accent} />
+          </View>
+          <View style={styles.draftToolTextCol}>
+            <Text style={styles.draftToolTitle}>
+              {language === 'mr' ? 'फॉर्म-५ प्रमाणपत्र व PDF जनरेटर' : 'Form-V PDF Generator'}
+            </Text>
+            <Text style={styles.draftToolSub}>
+              {language === 'mr'
+                ? 'MAHABOCW ९० दिवस काम प्रमाणपत्र थेट PDF मध्ये तयार करा'
+                : 'Generate 90-day work certificate ready for signature'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.accent} />
+        </TouchableOpacity>
+
+        {/* Action Header: Contractor Draft Tool */}
+        <TouchableOpacity
+          onPress={() => setDraftModalVisible(true)}
+          style={[styles.draftToolCard, styles.draftToolCardSecondary]}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.draftToolIconBox, styles.draftToolIconBoxNavy]}>
+            <Ionicons name="create-outline" size={20} color={Colors.primary} />
           </View>
           <View style={styles.draftToolTextCol}>
             <Text style={styles.draftToolTitle}>{t('draftModeBtn')}</Text>
             <Text style={styles.draftToolSub}>
-              कंत्राटदाराकडे ९० दिवस प्रमाणपत्रासाठी अधिकृत पत्र तयार करा
+              {language === 'mr'
+                ? 'कंत्राटदाराकडे ९० दिवस प्रमाणपत्रासाठी अधिकृत पत्र तयार करा'
+                : 'Draft request letter for contractor signature'}
             </Text>
           </View>
-          <Text style={styles.draftToolArrow}>→</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
         </TouchableOpacity>
 
         {/* Quick Suggestion Chips */}
@@ -323,11 +414,11 @@ export default function AssistantScreen() {
                   msg.role === 'user' ? styles.userBubble : styles.assistantBubble,
                 ]}
               >
-                {/* Assistant Badge */}
+                {/* Assistant Header */}
                 {msg.role === 'assistant' && (
                   <View style={styles.assistantHeaderRow}>
                     <View style={styles.botIcon}>
-                      <Text style={styles.botIconText}>🤖</Text>
+                      <Ionicons name="shield-checkmark" size={14} color={Colors.textInverse} />
                     </View>
                     <Text style={styles.botName}>HAQ Benefits Advisor</Text>
                     {msg.isDemoFallback && (
@@ -338,22 +429,21 @@ export default function AssistantScreen() {
                   </View>
                 )}
 
-                <Text style={styles.bubbleText}>{msg.content}</Text>
+                <Text style={[styles.bubbleText, msg.role === 'user' && styles.userBubbleText]}>
+                  {msg.content}
+                </Text>
 
-                {/* Speaker playback button for assistant messages */}
+                {/* Real Sarvam bulbul:v3 Audio Playback Bar */}
                 {msg.role === 'assistant' && (
-                  <TouchableOpacity
-                    onPress={() => handleSpeakMessage(msg.id, msg.content)}
-                    style={styles.speakerRow}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.speakerIcon}>
-                      {voicePlayingId === msg.id ? '🔊 बोलत आहे (Stop)' : '🔈 ऐका (Listen)'}
-                    </Text>
-                  </TouchableOpacity>
+                  <AudioPlayerBar
+                    messageId={msg.id}
+                    audioBase64={msg.audioBase64}
+                    textFallback={msg.content}
+                    language={language}
+                  />
                 )}
 
-                {/* Attached Citations */}
+                {/* Attached Verified Citations */}
                 {msg.citations && msg.citations.length > 0 && (
                   <View style={styles.citationsContainer}>
                     {msg.citations.map((c, cIdx) => (
@@ -367,29 +457,40 @@ export default function AssistantScreen() {
 
           {loading && (
             <View style={styles.loadingBubble}>
-              <ActivityIndicator size="small" color={Colors.constructionOrange} />
-              <Text style={styles.loadingText}>HAQ is reviewing official rules...</Text>
+              <ActivityIndicator size="small" color={Colors.accent} />
+              <Text style={styles.loadingText}>
+                {language === 'mr'
+                  ? 'HAQ अधिकृत सरकारी नियमांची पडताळणी करत आहे...'
+                  : 'HAQ is reviewing verified MAHABOCW rules...'}
+              </Text>
             </View>
           )}
         </View>
 
-        {/* Input Bar with Push-to-Talk Mic */}
-        <View style={styles.inputContainer}>
-          <TouchableOpacity
-            onPress={handleVoicePushToTalk}
-            style={[styles.micButton, isRecording && styles.micButtonActive]}
-            activeOpacity={0.8}
-            accessibilityLabel="Push to talk"
-          >
-            <Text style={styles.micButtonIcon}>{isRecording ? '⏹️' : '🎙️'}</Text>
-          </TouchableOpacity>
+        {/* Dedicated Voice Controller Section */}
+        <View style={styles.voiceSectionCard}>
+          <VoiceController
+            state={voiceState}
+            durationMs={recordingDurationMs}
+            onStartRecording={handleStartVoiceRecording}
+            onStopRecording={handleStopVoiceRecording}
+            onCancelRecording={handleCancelVoiceRecording}
+            language={language}
+          />
+        </View>
 
+        {/* Text Input Fallback Bar */}
+        <View style={styles.inputContainer}>
           <TextInput
             style={styles.chatTextInput}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={isRecording ? 'ऐकत आहे... (Listening...)' : t('assistantInputPlaceholder')}
-            placeholderTextColor={isRecording ? Colors.constructionOrange : Colors.textMuted}
+            placeholder={
+              voiceState === 'recording'
+                ? language === 'mr' ? 'ऐकत आहे...' : 'Listening...'
+                : t('assistantInputPlaceholder')
+            }
+            placeholderTextColor={Colors.textMuted}
             onSubmitEditing={() => handleSendMessage()}
             returnKeyType="send"
           />
@@ -397,17 +498,31 @@ export default function AssistantScreen() {
             onPress={() => handleSendMessage()}
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
             disabled={!inputText.trim() || loading}
+            activeOpacity={0.8}
           >
-            <Text style={styles.sendButtonArrow}>↑</Text>
+            <Ionicons name="arrow-up" size={20} color={Colors.textInverse} />
           </TouchableOpacity>
         </View>
 
         {/* Advisory Disclaimer */}
         <View style={styles.advisoryCard}>
-          <Text style={styles.advisoryIcon}>ℹ️</Text>
+          <Ionicons name="information-circle-outline" size={16} color={Colors.secondary} />
           <Text style={styles.advisoryText}>{t('assistantAdvisory')}</Text>
         </View>
       </ScrollView>
+
+      {/* Real Voice Review & Confirmation Modal */}
+      <VoiceReviewModal
+        visible={reviewModalVisible}
+        transcript={voiceTranscript}
+        language={language}
+        onConfirm={handleConfirmTranscript}
+        onReRecord={handleReRecordFromModal}
+        onCancel={() => {
+          setReviewModalVisible(false);
+          setVoiceState('idle');
+        }}
+      />
 
       {/* DRAFT CONTRACTOR REQUEST MODAL */}
       <Modal visible={draftModalVisible} transparent animationType="slide">
@@ -419,7 +534,7 @@ export default function AssistantScreen() {
                 <Text style={styles.modalSub}>{t('draftModalDesc')}</Text>
               </View>
               <TouchableOpacity onPress={() => setDraftModalVisible(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -515,92 +630,93 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
   },
   titleSection: {
-    marginBottom: 14,
+    marginBottom: Spacing.md,
   },
   screenTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.screenTitle,
     color: Colors.textPrimary,
-    marginBottom: 4,
   },
   screenSubtitle: {
-    fontSize: 13,
+    ...Typography.caption,
     color: Colors.textSecondary,
+    marginTop: 2,
   },
   draftToolCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.constructionOrange,
-    marginBottom: 16,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.sm,
+    ...Shadows.card,
+  },
+  draftToolCardSecondary: {
+    marginBottom: Spacing.md,
   },
   draftToolIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.constructionOrangeGlow,
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.saffronOrangeLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  draftToolIcon: {
-    fontSize: 20,
+  draftToolIconBoxNavy: {
+    backgroundColor: Colors.warmIvory,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   draftToolTextCol: {
     flex: 1,
   },
   draftToolTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    ...Typography.cardTitle,
+    fontSize: 14,
     color: Colors.textPrimary,
     marginBottom: 2,
   },
   draftToolSub: {
+    ...Typography.meta,
     fontSize: 11,
     color: Colors.textSecondary,
     lineHeight: 15,
   },
-  draftToolArrow: {
-    fontSize: 18,
-    color: Colors.constructionOrange,
-    fontWeight: '800',
-  },
   chipsSection: {
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   chipsLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textMuted,
-    marginBottom: 8,
+    ...Typography.badgeText,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
   },
   chipsScroll: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   quickChip: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   quickChipText: {
-    color: Colors.textSecondary,
+    ...Typography.badgeText,
     fontSize: 12,
-    fontWeight: '600',
+    color: Colors.textPrimary,
   },
   threadContainer: {
-    gap: 12,
-    marginBottom: 16,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
   },
   bubbleWrapper: {
     flexDirection: 'row',
@@ -613,242 +729,206 @@ const styles = StyleSheet.create({
   },
   bubble: {
     maxWidth: '92%',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    ...Shadows.card,
   },
   userBubble: {
-    backgroundColor: Colors.constructionOrange,
-    borderBottomRightRadius: 4,
+    backgroundColor: Colors.primary,
+    borderBottomRightRadius: Radius.xs,
   },
   assistantBubble: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.borderHighlight,
-    borderBottomLeftRadius: 4,
+    borderColor: Colors.border,
+    borderBottomLeftRadius: Radius.xs,
   },
   assistantHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   botIcon: {
     width: 22,
     height: 22,
     borderRadius: 6,
-    backgroundColor: 'rgba(22, 119, 255, 0.2)',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  botIconText: {
-    fontSize: 12,
-  },
   botName: {
+    ...Typography.badgeText,
     fontSize: 12,
-    fontWeight: '700',
-    color: '#60A5FA',
+    color: Colors.primary,
     flex: 1,
   },
   demoBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: Colors.successSurface,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
+    borderWidth: 1,
+    borderColor: Colors.successBorder,
   },
   demoBadgeText: {
+    ...Typography.meta,
     color: Colors.success,
     fontSize: 9,
     fontWeight: '700',
   },
   bubbleText: {
-    fontSize: 14,
+    ...Typography.bodyRegular,
     color: Colors.textPrimary,
-    lineHeight: 20,
+  },
+  userBubbleText: {
+    color: Colors.textInverse,
   },
   citationsContainer: {
-    marginTop: 10,
-  },
-  speakerRow: {
-    marginTop: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  speakerIcon: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.constructionOrange,
+    marginTop: Spacing.sm,
   },
   loadingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surface,
-    padding: 12,
-    borderRadius: 12,
+    gap: Spacing.sm,
+    backgroundColor: '#FFFFFF',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   loadingText: {
+    ...Typography.caption,
     color: Colors.textSecondary,
-    fontSize: 12,
+  },
+  voiceSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    ...Shadows.card,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  micButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-  },
-  micButtonActive: {
-    backgroundColor: Colors.constructionOrangeGlow,
-    borderColor: Colors.constructionOrange,
-    borderWidth: 2,
-  },
-  micButtonIcon: {
-    fontSize: 20,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   chatTextInput: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.borderHighlight,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    ...Typography.bodyRegular,
     color: Colors.textPrimary,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
     minHeight: 48,
   },
   sendButton: {
     width: 48,
     height: 48,
-    borderRadius: 14,
-    backgroundColor: Colors.constructionOrange,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Shadows.card,
   },
   sendButtonDisabled: {
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sendButtonArrow: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
+    backgroundColor: Colors.borderHighlight,
+    opacity: 0.5,
   },
   advisoryCard: {
     flexDirection: 'row',
-    gap: 8,
-    backgroundColor: Colors.backgroundSecondary,
-    padding: 10,
-    borderRadius: 10,
+    gap: Spacing.sm,
+    backgroundColor: Colors.warmIvory,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  advisoryIcon: {
-    fontSize: 14,
-  },
   advisoryText: {
+    ...Typography.meta,
     fontSize: 11,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     flex: 1,
-    lineHeight: 15,
+    lineHeight: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(16, 26, 58, 0.45)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.surfaceElevated,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     maxHeight: '85%',
-    padding: 20,
+    padding: Spacing.xl,
     paddingBottom: 36,
+    ...Shadows.elevated,
   },
   modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
+    ...Typography.sectionTitle,
     color: Colors.textPrimary,
   },
   modalSub: {
-    fontSize: 12,
+    ...Typography.caption,
     color: Colors.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.backgroundSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeBtnText: {
-    color: Colors.textSecondary,
-    fontSize: 16,
+    padding: Spacing.xs,
   },
   modalBody: {
     maxHeight: 450,
   },
   formContainer: {
-    gap: 10,
+    gap: Spacing.md,
   },
   fieldLabel: {
+    ...Typography.badgeText,
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
   },
   fieldInput: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 10,
+    backgroundColor: Colors.warmIvory,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    padding: Spacing.md,
+    ...Typography.bodyRegular,
     color: Colors.textPrimary,
-    padding: 12,
-    fontSize: 13,
   },
   generateButton: {
-    backgroundColor: Colors.constructionOrange,
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: Spacing.xs,
   },
   generateButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    ...Typography.buttonPrimary,
+    color: Colors.textInverse,
   },
   draftResultContainer: {
-    gap: 12,
+    gap: Spacing.md,
   },
   draftBox: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: Colors.warmIvory,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -856,41 +936,39 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 13,
     lineHeight: 20,
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   instructionsText: {
-    fontSize: 12,
-    color: Colors.constructionOrange,
-    lineHeight: 17,
+    ...Typography.caption,
+    color: Colors.accent,
+    lineHeight: 18,
   },
   draftActionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: Spacing.md,
   },
   copyBtn: {
     flex: 1,
-    backgroundColor: Colors.constructionOrange,
-    paddingVertical: 12,
-    borderRadius: 10,
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   copyBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    ...Typography.buttonPrimary,
+    color: Colors.textInverse,
   },
   editBtn: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
-    paddingVertical: 12,
-    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
   },
   editBtnText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    ...Typography.buttonSecondary,
+    color: Colors.textPrimary,
   },
 });

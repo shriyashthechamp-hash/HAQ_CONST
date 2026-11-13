@@ -1,16 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../theme/colors';
+import { Typography } from '../theme/typography';
+import { Spacing, Radius } from '../theme/spacing';
 import { useApp } from '../context/AppContext';
 import { Language } from '@haq/shared';
+import { BrandLogo } from './BrandLogo';
 
 interface HeaderBarProps {
   title?: string;
   showLanguageToggle?: boolean;
 }
 
+/**
+ * Modern Premium Header Bar with Official HAQ Logo
+ * and accessible language switcher (Marathi, Hindi, English).
+ */
 export const HeaderBar: React.FC<HeaderBarProps> = ({ title, showLanguageToggle = true }) => {
-  const { language, setLanguage, isBackendConnected } = useApp();
+  const { language, setLanguage } = useApp();
 
   const languages: { code: Language; label: string }[] = [
     { code: 'mr', label: 'मराठी' },
@@ -21,14 +28,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ title, showLanguageToggle 
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
-        <View style={styles.motifContainer}>
-          <View style={styles.motifDiamond} />
-          <View style={styles.motifDot} />
-        </View>
-        <View>
-          <Text style={styles.brandText}>HAQ</Text>
-          <Text style={styles.brandSubtitle}>Benefits, Unlocked</Text>
-        </View>
+        <BrandLogo size="compact" />
+        {title && <Text style={styles.titleText}>{title}</Text>}
       </View>
 
       {showLanguageToggle && (
@@ -41,6 +42,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ title, showLanguageToggle 
                 onPress={() => setLanguage(l.code)}
                 style={[styles.langChip, isActive && styles.langChipActive]}
                 accessibilityLabel={`Switch language to ${l.label}`}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.langText, isActive && styles.langTextActive]}>
                   {l.label}
@@ -56,12 +58,12 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ title, showLanguageToggle 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: 48,
-    paddingBottom: 14,
+    paddingBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -69,50 +71,17 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.sm,
   },
-  motifContainer: {
-    width: 32,
-    height: 32,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderHighlight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  motifDiamond: {
-    width: 14,
-    height: 14,
-    backgroundColor: Colors.constructionOrange,
-    transform: [{ rotate: '45deg' }],
-    borderRadius: 2,
-  },
-  motifDot: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-    backgroundColor: Colors.textPrimary,
-    borderRadius: 2,
-  },
-  brandText: {
-    fontSize: 20,
-    fontWeight: '800',
+  titleText: {
+    ...Typography.sectionTitle,
     color: Colors.textPrimary,
-    letterSpacing: 2,
-  },
-  brandSubtitle: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.constructionOrange,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    marginLeft: Spacing.xs,
   },
   langSelector: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
+    backgroundColor: Colors.warmIvory,
+    borderRadius: Radius.full,
     padding: 3,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -120,18 +89,18 @@ const styles = StyleSheet.create({
   langChip: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 16,
+    borderRadius: Radius.full,
   },
   langChipActive: {
-    backgroundColor: Colors.constructionOrange,
+    backgroundColor: Colors.accent,
   },
   langText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...Typography.badgeText,
+    fontSize: 11,
     color: Colors.textSecondary,
   },
   langTextActive: {
-    color: '#FFFFFF',
+    color: Colors.textInverse,
     fontWeight: '700',
   },
 });
