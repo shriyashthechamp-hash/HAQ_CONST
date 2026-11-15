@@ -12,8 +12,11 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Colors } from '../src/theme/colors';
+import { Typography } from '../src/theme/typography';
+import { Spacing, Radius, Shadows } from '../src/theme/spacing';
 import { useApp } from '../src/context/AppContext';
 import { HeaderBar } from '../src/components/HeaderBar';
 import { BottomNav } from '../src/components/BottomNav';
@@ -22,7 +25,7 @@ import { CertifierType, FormVDocumentType, FormVParams } from '@haq/shared';
 
 export default function FormVScreen() {
   const router = useRouter();
-  const { t, language } = useApp();
+  const { language, t } = useApp();
 
   const [activeTab, setActiveTab] = useState<'FORM' | 'PREVIEW'>('FORM');
   const [docType, setDocType] = useState<FormVDocumentType>('FORM_V_CERTIFICATE');
@@ -99,36 +102,52 @@ export default function FormVScreen() {
     setTimeout(() => setCopiedNotice(false), 3000);
   };
 
+  const certifierOptions: { type: CertifierType; label: string }[] = [
+    { type: 'CONTRACTOR', label: language === 'mr' ? 'कंत्राटदार (Contractor)' : language === 'hi' ? 'ठेकेदार (Contractor)' : 'Contractor' },
+    { type: 'GRAMSEVAK', label: language === 'mr' ? 'ग्रामसेवक (Gramsevak)' : language === 'hi' ? 'ग्रामसेवक (Gramsevak)' : 'Gramsevak' },
+    { type: 'MUNICIPAL_OFFICER', label: language === 'mr' ? 'महानगरपालिका अधिकारी (Municipal Officer)' : language === 'hi' ? 'नगर निगम अधिकारी' : 'Municipal Officer' },
+    { type: 'TRADE_UNION', label: language === 'mr' ? 'नोंदणीकृत बांधकाम कामगार संघटना' : language === 'hi' ? 'पंजीकृत श्रमिक यूनियन' : 'Registered Trade Union' },
+  ];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <HeaderBar />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Title Header */}
+        {/* Title Header with Back Navigation */}
         <View style={styles.titleSection}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.push('/documents')}
+            accessibilityRole="button"
             accessibilityLabel="कागदपत्रांकडे परत जा"
           >
-            <Text style={styles.backButtonText}>← कागदपत्रे</Text>
+            <Ionicons name="arrow-back" size={16} color={Colors.primaryNavy} />
+            <Text style={styles.backButtonText}>{language === 'mr' ? 'कागदपत्रे' : language === 'hi' ? 'दस्तावेज' : 'Documents'}</Text>
           </TouchableOpacity>
-          <Text style={styles.screenTitle}>फॉर्म-५ लेटर जनरेटर</Text>
+          <Text style={styles.screenTitle}>{t('formVNavTitle')}</Text>
           <Text style={styles.screenSubtitle}>
-            MAHABOCW ९० दिवस काम प्रमाणपत्र आणि कंत्राटदार विनंती अर्ज
+            {language === 'mr'
+              ? 'MAHABOCW ९० दिवस काम प्रमाणपत्र आणि कंत्राटदार विनंती अर्ज'
+              : language === 'hi'
+              ? 'MAHABOCW ९० दिन कार्य प्रमाण पत्र व ठेकेदार आवेदन पत्र'
+              : 'MAHABOCW Form-V 90-day working certificate & contractor letter'}
           </Text>
         </View>
 
-        {/* Official Provenance Banner */}
+        {/* Official Statutory Provenance Banner */}
         <View style={styles.provenanceBanner}>
-          <View style={styles.provenanceIconBadge}>
-            <Text style={styles.provenanceIconText}>📜</Text>
-          </View>
+          <Ionicons name="ribbon-outline" size={24} color={Colors.accentSaffronDark} style={{ marginTop: 2 }} />
           <View style={styles.provenanceContent}>
-            <Text style={styles.provenanceTitle}>अधिकृत स्रोत: MAHABOCW नमुना क्रमांक ५</Text>
+            <Text style={styles.provenanceTitle}>
+              {language === 'mr' ? 'अधिकृत वैधानिक स्रोत: MAHABOCW नमुना ५' : language === 'hi' ? 'आधिकारिक वैधानिक स्रोत: MAHABOCW प्रारूप ५' : 'Official Statutory Source: MAHABOCW Form-V'}
+            </Text>
             <Text style={styles.provenanceText}>
-              महाराष्ट्र इमारत व इतर बांधकाम कामगार नियम २००७, नियम २८२ अन्वये विहित केलेला अधिकृत नमुना.
-              हे पत्र भरून कंत्राटदार / ग्रामसेवक यांच्याकडून सही व शिक्का घेणे आवश्यक आहे.
+              {language === 'mr'
+                ? 'महाराष्ट्र इमारत व इतर बांधकाम कामगार नियम २००७, नियम २८२ अन्वये विहित केलेला अधिकृत नमुना. हे पत्र भरून कंत्राटदार किंवा ग्रामसेवक यांच्याकडून सही-शिक्का घेणे आवश्यक आहे.'
+                : language === 'hi'
+                ? 'महाराष्ट्र भवन एवं अन्य निर्माण श्रमिक नियम २००७, नियम २८२ के तहत विहित आधिकारिक प्रारूप। इस पर ठेकेदार या ग्रामसेवक के हस्ताक्षर व मुहर अनिवार्य हैं।'
+                : 'Prescribed under Maharashtra BOCW Rules 2007, Rule 282. Must be certified with signature and stamp from contractor or Gramsevak.'}
             </Text>
           </View>
         </View>
@@ -138,17 +157,21 @@ export default function FormVScreen() {
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'FORM' && styles.tabButtonActive]}
             onPress={() => setActiveTab('FORM')}
+            activeOpacity={0.8}
           >
+            <Ionicons name="create-outline" size={16} color={activeTab === 'FORM' ? '#FFFFFF' : Colors.mutedSlate} />
             <Text style={[styles.tabButtonText, activeTab === 'FORM' && styles.tabButtonTextActive]}>
-              १. तपशील भरा
+              {language === 'mr' ? '१. तपशील भरा' : language === 'hi' ? '१. विवरण भरें' : '1. Fill Details'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'PREVIEW' && styles.tabButtonActive]}
             onPress={() => setActiveTab('PREVIEW')}
+            activeOpacity={0.8}
           >
+            <Ionicons name="eye-outline" size={16} color={activeTab === 'PREVIEW' ? '#FFFFFF' : Colors.mutedSlate} />
             <Text style={[styles.tabButtonText, activeTab === 'PREVIEW' && styles.tabButtonTextActive]}>
-              २. पूर्वावलोकन व PDF
+              {language === 'mr' ? '२. पूर्वावलोकन व PDF' : language === 'hi' ? '२. पूर्वावलोकन व PDF' : '2. Preview & PDF'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -158,27 +181,19 @@ export default function FormVScreen() {
           <TouchableOpacity
             style={[styles.docTypeBtn, docType === 'FORM_V_CERTIFICATE' && styles.docTypeBtnActive]}
             onPress={() => setDocType('FORM_V_CERTIFICATE')}
+            activeOpacity={0.85}
           >
-            <Text
-              style={[
-                styles.docTypeBtnText,
-                docType === 'FORM_V_CERTIFICATE' && styles.docTypeBtnTextActive,
-              ]}
-            >
-              फॉर्म-५ प्रमाणपत्र (Certificate)
+            <Text style={[styles.docTypeBtnText, docType === 'FORM_V_CERTIFICATE' && styles.docTypeBtnTextActive]}>
+              {language === 'mr' ? 'फॉर्म-५ प्रमाणपत्र (Certificate)' : 'Form-V Certificate'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.docTypeBtn, docType === 'FORM_V_REQUEST_LETTER' && styles.docTypeBtnActive]}
             onPress={() => setDocType('FORM_V_REQUEST_LETTER')}
+            activeOpacity={0.85}
           >
-            <Text
-              style={[
-                styles.docTypeBtnText,
-                docType === 'FORM_V_REQUEST_LETTER' && styles.docTypeBtnTextActive,
-              ]}
-            >
-              विनंती अर्ज (Worker Letter)
+            <Text style={[styles.docTypeBtnText, docType === 'FORM_V_REQUEST_LETTER' && styles.docTypeBtnTextActive]}>
+              {language === 'mr' ? 'विनंती अर्ज (Worker Request)' : 'Request Letter'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -186,269 +201,296 @@ export default function FormVScreen() {
         {activeTab === 'FORM' ? (
           /* FORM TAB */
           <View style={styles.formCard}>
-            <Text style={styles.sectionHeading}>कामगाराचा वैयक्तिक तपशील</Text>
+            <Text style={styles.sectionHeading}>{language === 'mr' ? 'कामगाराचा वैयक्तिक तपशील' : language === 'hi' ? 'श्रमिक व्यक्तिगत विवरण' : 'Worker Personal Details'}</Text>
 
-            <Text style={styles.inputLabel}>कामगाराचे पूर्ण नाव *</Text>
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'कामगाराचे पूर्ण नाव *' : 'Worker Full Name *'}</Text>
             <TextInput
               style={styles.textInput}
               value={workerName}
               onChangeText={setWorkerName}
               placeholder="उदा. रमेश मारुती जाधव"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={Colors.textMuted}
             />
 
-            <Text style={styles.inputLabel}>वडिलांचे / पतीचे नाव *</Text>
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'वडिलांचे / पतीचे नाव *' : 'Father / Husband Name *'}</Text>
             <TextInput
               style={styles.textInput}
               value={fatherName}
               onChangeText={setFatherName}
               placeholder="उदा. मारुती विठ्ठल जाधव"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={Colors.textMuted}
             />
 
-            <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.inputLabel}>वय (वर्षे) *</Text>
+            <View style={styles.twoColRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>{language === 'mr' ? 'वय (वर्षे) *' : 'Age *'}</Text>
                 <TextInput
                   style={styles.textInput}
                   value={age}
                   onChangeText={setAge}
                   keyboardType="numeric"
-                  placeholder="उदा. ३२"
-                  placeholderTextColor="#64748B"
+                  placeholder="३२"
+                  placeholderTextColor={Colors.textMuted}
                 />
               </View>
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={styles.inputLabel}>मोबाईल क्रमांक</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>{language === 'mr' ? 'मोबाईल नंबर *' : 'Mobile *'}</Text>
                 <TextInput
                   style={styles.textInput}
                   value={mobileNumber}
                   onChangeText={setMobileNumber}
                   keyboardType="phone-pad"
-                  placeholder="उदा. ९८७६५४३२१०"
-                  placeholderTextColor="#64748B"
+                  placeholder="९८७६५४३२१०"
+                  placeholderTextColor={Colors.textMuted}
                 />
               </View>
             </View>
 
-            <Text style={styles.inputLabel}>राहण्याचा पत्ता *</Text>
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'पत्ता (महाराष्ट्रातील) *' : 'Residential Address *'}</Text>
             <TextInput
-              style={[styles.textInput, { height: 60 }]}
+              style={[styles.textInput, { minHeight: 60 }]}
               value={address}
               onChangeText={setAddress}
               multiline
-              placeholder="उदा. रूम नं. १२, कात्रज कोंढवा रोड, पुणे"
-              placeholderTextColor="#64748B"
+              placeholder="कात्रज, पुणे"
+              placeholderTextColor={Colors.textMuted}
             />
 
-            <Text style={styles.inputLabel}>कामाचे स्वरूप (Trade) *</Text>
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'कामाचे स्वरूप (व्यवसाय) *' : 'Trade Role *'}</Text>
             <TextInput
               style={styles.textInput}
               value={tradeType}
               onChangeText={setTradeType}
-              placeholder="उदा. गवंडीकाम / सेंट्रींग / प्लंबिंग"
-              placeholderTextColor="#64748B"
+              placeholder="उदा. गवंडी कामगार (Masonry)"
+              placeholderTextColor={Colors.textMuted}
             />
 
-            <Text style={[styles.sectionHeading, { marginTop: 24 }]}>
-              कामाचा कालावधी व साइट तपशील
+            {/* Certifier Section */}
+            <Text style={[styles.sectionHeading, { marginTop: Spacing.md }]}>
+              {language === 'mr' ? 'प्रमाणित करणाऱ्या व्यक्तीचा तपशील' : language === 'hi' ? 'प्रमाणित करने वाले का विवरण' : 'Certifier Details'}
             </Text>
 
-            <Text style={styles.inputLabel}>साइटचे नाव व पत्ता *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={siteLocation}
-              onChangeText={setSiteLocation}
-              placeholder="उदा. गंगा व्हिलेज रेसिडेन्सी, बाणेर, पुणे"
-              placeholderTextColor="#64748B"
-            />
-
-            <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.inputLabel}>सुरुवातीचा दिनांक *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={workStartDate}
-                  onChangeText={setWorkStartDate}
-                  placeholder="उदा. ०१/११/२०२३"
-                  placeholderTextColor="#64748B"
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={styles.inputLabel}>शेवटचा दिनांक *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={workEndDate}
-                  onChangeText={setWorkEndDate}
-                  placeholder="उदा. ३१/०८/२०२४"
-                  placeholderTextColor="#64748B"
-                />
-              </View>
-            </View>
-
-            <Text style={styles.inputLabel}>मागील १२ महिन्यांतील एकूण कामाचे दिवस *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={daysWorked}
-              onChangeText={setDaysWorked}
-              keyboardType="numeric"
-              placeholder="किमान ९० दिवस आवश्यक"
-              placeholderTextColor="#64748B"
-            />
-
-            <Text style={[styles.sectionHeading, { marginTop: 24 }]}>
-              प्रमाणपत्र देणारा प्राधिकारी / कंत्राटदार
-            </Text>
-
-            {/* Certifier Type Selector */}
-            <View style={styles.certifierTypeContainer}>
-              {[
-                { key: 'CONTRACTOR', label: 'कंत्राटदार / बिल्डर' },
-                { key: 'GRAMSEVAK', label: 'ग्रामसेवक (ग्रामीण)' },
-                { key: 'MUNICIPAL_OFFICER', label: 'पालिका अधिकारी (पुणे)' },
-                { key: 'TRADE_UNION', label: 'कामगार संघटना' },
-              ].map((opt) => (
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'प्रमाणित करणारी व्यक्ती / पद:' : 'Certifier Authority:'}</Text>
+            <View style={styles.certifierStack}>
+              {certifierOptions.map((opt) => (
                 <TouchableOpacity
-                  key={opt.key}
+                  key={opt.type}
                   style={[
-                    styles.certifierChip,
-                    certifierType === opt.key && styles.certifierChipActive,
+                    styles.certifierOption,
+                    certifierType === opt.type && styles.certifierOptionActive,
                   ]}
-                  onPress={() => setCertifierType(opt.key as CertifierType)}
+                  onPress={() => setCertifierType(opt.type)}
+                  activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.certifierChipText,
-                      certifierType === opt.key && styles.certifierChipTextActive,
-                    ]}
-                  >
+                  <Ionicons
+                    name={certifierType === opt.type ? 'radio-button-on' : 'radio-button-off'}
+                    size={18}
+                    color={certifierType === opt.type ? Colors.accentSaffronDark : Colors.mutedSlate}
+                  />
+                  <Text style={[styles.certifierOptionText, certifierType === opt.type && styles.certifierOptionTextActive]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>कंत्राटदार / अधिकारी / संस्था नाव *</Text>
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'कंत्राटदार / आस्थापनेचे नाव *' : 'Contractor / Agency Name *'}</Text>
             <TextInput
               style={styles.textInput}
               value={certifierName}
               onChangeText={setCertifierName}
-              placeholder="उदा. पाटील कन्स्ट्रक्शन / ग्रामसेवक"
-              placeholderTextColor="#64748B"
+              placeholder="उदा. पाटील इन्फ्रास्ट्रक्चर प्रा. लि."
+              placeholderTextColor={Colors.textMuted}
             />
 
-            <Text style={styles.inputLabel}>नोंदणी / परवाना क्रमांक (ऐच्छिक)</Text>
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'कंत्राटदार नोंदणी क्रमांक / परवाना *' : 'Registration / License No *'}</Text>
             <TextInput
               style={styles.textInput}
               value={certifierRegNo}
               onChangeText={setCertifierRegNo}
               placeholder="उदा. MH-PUN-CONTR-44910"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={Colors.textMuted}
             />
 
+            {/* Work Details */}
+            <Text style={[styles.sectionHeading, { marginTop: Spacing.md }]}>
+              {language === 'mr' ? 'साइट व कामाचा तपशील' : language === 'hi' ? 'साइट व कार्य विवरण' : 'Site & Work Period'}
+            </Text>
+
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'बांधकाम साइटचे नाव व ठिकाण *' : 'Site Name & Location *'}</Text>
+            <TextInput
+              style={styles.textInput}
+              value={siteLocation}
+              onChangeText={setSiteLocation}
+              placeholder="गंगा व्हिलेज, बाणेर, पुणे"
+              placeholderTextColor={Colors.textMuted}
+            />
+
+            <View style={styles.twoColRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>{language === 'mr' ? 'सुरुवात तारीख *' : 'Start Date *'}</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={workStartDate}
+                  onChangeText={setWorkStartDate}
+                  placeholder="०१/११/२०२३"
+                  placeholderTextColor={Colors.textMuted}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>{language === 'mr' ? 'शेवट तारीख *' : 'End Date *'}</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={workEndDate}
+                  onChangeText={setWorkEndDate}
+                  placeholder="३१/०८/२०२४"
+                  placeholderTextColor={Colors.textMuted}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.inputLabel}>{language === 'mr' ? 'एकूण काम केलेले दिवस (किमान ९०) *' : 'Days Worked (Min 90) *'}</Text>
+            <TextInput
+              style={[styles.textInput, { fontWeight: '700' }]}
+              value={daysWorked}
+              onChangeText={setDaysWorked}
+              keyboardType="numeric"
+              placeholder="११०"
+              placeholderTextColor={Colors.textMuted}
+            />
+
+            {/* Switch to preview button */}
             <TouchableOpacity
-              style={styles.primaryActionButton}
+              style={styles.previewBtn}
               onPress={() => setActiveTab('PREVIEW')}
+              activeOpacity={0.88}
             >
-              <Text style={styles.primaryActionButtonText}>पुढील पायरी: पूर्वावलोकन पहा →</Text>
+              <Text style={styles.previewBtnText}>
+                {language === 'mr' ? 'पूर्वावलोकन पहा व PDF तयार करा' : language === 'hi' ? 'पूर्वावलोकन देखें व PDF बनाएं' : 'View Preview & Generate PDF'} →
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           /* PREVIEW TAB */
           <View style={styles.previewCard}>
-            <View style={styles.draftWatermarkBar}>
-              <Text style={styles.draftWatermarkText}>
-                ⚠️ नमुना मसुदा (DRAFT) — सक्षम प्राधिकाऱ्याची प्रत्यक्ष सही व शिक्का आवश्यक आहे.
-              </Text>
-            </View>
+            {copiedNotice && (
+              <View style={styles.copiedBanner}>
+                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                <Text style={styles.copiedBannerText}>{t('copied')}</Text>
+              </View>
+            )}
 
-            {/* Document Preview Box */}
             <View style={styles.documentSheet}>
-              <Text style={styles.docHeaderTitle}>
-                {docType === 'FORM_V_CERTIFICATE'
-                  ? 'महाराष्ट्र इमारत व इतर बांधकाम कामगार कल्याणकारी मंडळ'
-                  : 'कंत्राटदाराकडे फॉर्म-५ साठी विनंती अर्ज'}
-              </Text>
-              {docType === 'FORM_V_CERTIFICATE' && (
-                <Text style={styles.docHeaderSub}>नमुना ५ — ९० दिवस कामाचे प्रमाणपत्र</Text>
-              )}
-
-              <View style={styles.divider} />
-
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>कामगाराचे नाव:</Text>
-                <Text style={styles.previewValue}>{workerName}</Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>वडिलांचे नाव:</Text>
-                <Text style={styles.previewValue}>{fatherName}</Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>वय व मोबाईल:</Text>
-                <Text style={styles.previewValue}>{age} वर्षे | {mobileNumber}</Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>पत्ता:</Text>
-                <Text style={styles.previewValue}>{address}</Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>कामाचे स्वरूप:</Text>
-                <Text style={styles.previewValue}>{tradeType}</Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>साइट ठिकाण:</Text>
-                <Text style={styles.previewValue}>{siteLocation}</Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>कामाचा कालावधी:</Text>
-                <Text style={styles.previewValue}>
-                  {workStartDate} ते {workEndDate} ({daysWorked} दिवस)
+              <View style={styles.docHeader}>
+                <Text style={styles.docGovHeader}>MAHARASHTRA BUILDING & OTHER CONSTRUCTION WORKERS WELFARE BOARD</Text>
+                <Text style={styles.docMainTitle}>
+                  {docType === 'FORM_V_CERTIFICATE' ? 'नमुना क्रमांक ५ (FORM - V)' : 'कंत्राटदाराकडे अर्ज (APPLICATION)'}
                 </Text>
-              </View>
-              <View style={styles.previewLine}>
-                <Text style={styles.previewLabel}>प्राधिकारी / कंत्राटदार:</Text>
-                <Text style={styles.previewValue}>
-                  {certifierName} {certifierRegNo ? `(${certifierRegNo})` : ''}
+                <Text style={styles.docSubTitle}>[ नियम २८२ पहा / See Rule 282 ]</Text>
+                <Text style={styles.docCertTitle}>
+                  {docType === 'FORM_V_CERTIFICATE'
+                    ? '९० दिवस काम केल्याचे प्रमाणपत्र (CERTIFICATE OF 90 DAYS WORK)'
+                    : 'फॉर्म-५ प्रमाणपत्र मिळण्याबाबत विनंती अर्ज'}
                 </Text>
               </View>
 
-              <View style={styles.signaturePlaceholderRow}>
-                <View style={styles.sigBox}>
-                  <Text style={styles.sigLabel}>कामगाराची सही / अंगठा</Text>
-                </View>
-                <View style={styles.sigBox}>
-                  <Text style={styles.sigLabel}>कंत्राटदार सही व शिक्का</Text>
-                </View>
+              <View style={styles.docBody}>
+                {docType === 'FORM_V_CERTIFICATE' ? (
+                  <>
+                    <Text style={styles.docParagraph}>
+                      प्रमाणित करण्यात येते की, श्री/श्रीमती <Text style={styles.docBold}>{workerName}</Text>,
+                      वडिलांचे/पतीचे नाव श्री. <Text style={styles.docBold}>{fatherName}</Text>,
+                      वय अंदाजे <Text style={styles.docBold}>{age}</Text> वर्षे,
+                      पत्ता: <Text style={styles.docBold}>{address}</Text>,
+                      मोबाईल: <Text style={styles.docBold}>{mobileNumber}</Text>.
+                    </Text>
+
+                    <Text style={styles.docParagraph}>
+                      हे आमच्या बांधकाम आस्थापनेवर <Text style={styles.docBold}>{siteLocation}</Text> येथे
+                      <Text style={styles.docBold}> {tradeType}</Text> म्हणून दिनांक <Text style={styles.docBold}>{workStartDate}</Text> ते
+                      दिनांक <Text style={styles.docBold}>{workEndDate}</Text> या कालावधीत प्रत्यक्ष कार्यरत होते.
+                    </Text>
+
+                    <Text style={styles.docParagraph}>
+                      सदर कामगाराने मागील १२ महिन्यांत एकूण <Text style={styles.docHighlight}> {daysWorked} दिवस </Text>
+                      बांधकाम काम पूर्ण केलेले आहे.
+                    </Text>
+
+                    <Text style={styles.docParagraph}>
+                      हे प्रमाणपत्र महाराष्ट्र इमारत व इतर बांधकाम कामगार (रोजगार नियमन व सेवाशर्ती) नियम २००७
+                      अन्वये नोंदणीसाठी देण्यात येत आहे.
+                    </Text>
+
+                    <View style={styles.docSignSection}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.docSignLabel}>ठिकाण: {issuePlace}</Text>
+                        <Text style={styles.docSignLabel}>दिनांक: {issueDate}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', flex: 1 }}>
+                        <Text style={styles.docSignLine}>स्वाक्षरी व शिक्का</Text>
+                        <Text style={styles.docSignerName}>{certifierName}</Text>
+                        <Text style={styles.docSignerSub}>({certifierRegNo})</Text>
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.docParagraph}>प्रति,{"\n"}श्री. <Text style={styles.docBold}>{certifierName}</Text>{"\n"}{siteLocation}</Text>
+                    <Text style={[styles.docParagraph, { fontWeight: '700' }]}>
+                      विषय: MAHABOCW ९० दिवस काम केल्याचे प्रमाणपत्र (फॉर्म-५) मिळण्याबाबत.
+                    </Text>
+                    <Text style={styles.docParagraph}>
+                      महोदय,{"\n"}
+                      मी, <Text style={styles.docBold}>{workerName}</Text>, आपल्या बांधकाम साइटवर {workStartDate} ते {workEndDate} या कालावधीत {tradeType} म्हणून एकूण {daysWorked} दिवस काम केले आहे.
+                    </Text>
+                    <Text style={styles.docParagraph}>
+                      मला महाराष्ट्र इमारत व इतर बांधकाम कामगार कल्याणकारी मंडळाकडे अधिकृत नोंदणी करायची असल्याने कृपया नियमानुसार नमुना ५ प्रमाणपत्र स्वाक्षरी व शिक्क्यानिशी द्यावे.
+                    </Text>
+                    <View style={{ marginTop: 24, alignItems: 'flex-end' }}>
+                      <Text style={styles.docParagraph}>आपला नम्र,{"\n"}<Text style={styles.docBold}>{workerName}</Text>{"\n"}मोबाईल: {mobileNumber}</Text>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtonsContainer}>
+            {/* Export and Share Actions */}
+            <View style={styles.exportActionsContainer}>
               <TouchableOpacity
-                style={styles.exportPdfButton}
+                style={styles.exportPdfBtn}
                 onPress={handleExportPdf}
                 disabled={exporting}
+                activeOpacity={0.88}
               >
                 {exporting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.exportPdfButtonText}>
-                    📄 {Platform.OS === 'web' ? 'PDF डाउनलोड / प्रिंट करा' : 'PDF जतन / शेअर करा'}
-                  </Text>
+                  <>
+                    <Ionicons name="download-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.exportPdfBtnText}>
+                      {language === 'mr' ? 'PDF डाउनलोड / शेअर करा' : language === 'hi' ? 'PDF डाउनलोड / शेयर करें' : 'Download / Share PDF'}
+                    </Text>
+                  </>
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.copyButton} onPress={handleCopyText}>
-                <Text style={styles.copyButtonText}>
-                  {copiedNotice ? '✓ मजकूर कॉपी झाला!' : '📋 मजकूर कॉपी करा'}
+              <TouchableOpacity
+                style={styles.copyTextBtn}
+                onPress={handleCopyText}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="copy-outline" size={18} color={Colors.primaryNavy} />
+                <Text style={styles.copyTextBtnText}>
+                  {language === 'mr' ? 'मजकूर कॉपी करा (WhatsApp)' : language === 'hi' ? 'कॉपी करें (WhatsApp)' : 'Copy Text (WhatsApp)'}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.editButton}
+                style={styles.editBackBtn}
                 onPress={() => setActiveTab('FORM')}
+                activeOpacity={0.8}
               >
-                <Text style={styles.editButtonText}>✏️ मसुदा संपादित करा</Text>
+                <Text style={styles.editBackBtnText}>← {language === 'mr' ? 'तपशील संपादित करा' : 'Edit Details'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -463,93 +505,86 @@ export default function FormVScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundWarm,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 110,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
   },
   titleSection: {
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   backButton: {
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Spacing.xs,
   },
   backButtonText: {
-    color: Colors.primaryCobalt,
-    fontSize: 14,
+    ...Typography.captionRegular,
     fontWeight: '600',
+    color: Colors.primaryNavy,
   },
   screenTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
+    ...Typography.screenTitle,
+    color: Colors.primaryNavy,
+    marginBottom: 4,
   },
   screenSubtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 20,
+    ...Typography.captionRegular,
+    color: Colors.mutedSlate,
   },
   provenanceBanner: {
     flexDirection: 'row',
-    backgroundColor: '#0F1E36',
+    backgroundColor: Colors.warmIvoryAlt,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
     borderWidth: 1,
-    borderColor: '#1D3B6F',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  provenanceIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#1E3A8A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  provenanceIconText: {
-    fontSize: 18,
+    borderColor: Colors.borderHighlight,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   provenanceContent: {
     flex: 1,
   },
   provenanceTitle: {
+    ...Typography.labelMedium,
     fontSize: 13,
-    fontWeight: '700',
-    color: '#93C5FD',
+    color: Colors.primaryNavy,
     marginBottom: 2,
   },
   provenanceText: {
+    ...Typography.captionRegular,
     fontSize: 11,
-    color: '#CBD5E1',
     lineHeight: 16,
+    color: Colors.mutedSlate,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 16,
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.md,
+    padding: 3,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderSubtle,
+    marginBottom: Spacing.sm,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 8,
+    paddingVertical: 10,
+    gap: 6,
+    borderRadius: Radius.sm,
   },
   tabButtonActive: {
-    backgroundColor: Colors.primaryCobalt,
+    backgroundColor: Colors.primaryNavy,
   },
   tabButtonText: {
+    ...Typography.badgeText,
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    color: Colors.mutedSlate,
   },
   tabButtonTextActive: {
     color: '#FFFFFF',
@@ -557,220 +592,272 @@ const styles = StyleSheet.create({
   },
   docTypeRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   docTypeBtn: {
     flex: 1,
-    backgroundColor: Colors.surface,
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    backgroundColor: Colors.cardSurface,
     alignItems: 'center',
   },
   docTypeBtnActive: {
-    borderColor: Colors.constructionOrange,
-    backgroundColor: 'rgba(255, 107, 44, 0.1)',
+    borderColor: Colors.accentSaffron,
+    backgroundColor: Colors.saffronOrangeLight,
+    borderWidth: 1.5,
   },
   docTypeBtnText: {
+    ...Typography.badgeText,
     fontSize: 12,
-    fontWeight: '600',
     color: Colors.textSecondary,
     textAlign: 'center',
   },
   docTypeBtnTextActive: {
-    color: Colors.constructionOrange,
+    color: Colors.accentSaffronDark,
     fontWeight: '700',
   },
   formCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 18,
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderSubtle,
+    marginBottom: Spacing.lg,
+    ...Shadows.card,
   },
   sectionHeading: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 12,
+    ...Typography.sectionTitle,
+    fontSize: 16,
+    color: Colors.primaryNavy,
+    marginBottom: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: Colors.borderSubtle,
     paddingBottom: 6,
   },
   inputLabel: {
+    ...Typography.labelMedium,
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 10,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+    marginTop: Spacing.xs,
   },
   textInput: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
+    backgroundColor: Colors.backgroundWarm,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 10,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: Colors.primaryNavy,
+    marginBottom: Spacing.xs,
   },
-  row: {
+  twoColRow: {
     flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  certifierTypeContainer: {
+  certifierStack: {
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  certifierOption: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  certifierChip: {
-    backgroundColor: Colors.background,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    backgroundColor: Colors.backgroundWarm,
   },
-  certifierChipActive: {
-    borderColor: Colors.primaryCobalt,
-    backgroundColor: 'rgba(30, 58, 138, 0.25)',
+  certifierOptionActive: {
+    borderColor: Colors.accentSaffron,
+    backgroundColor: Colors.saffronOrangeLight,
   },
-  certifierChipText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+  certifierOptionText: {
+    ...Typography.captionRegular,
+    fontSize: 13,
+    color: Colors.textPrimary,
   },
-  certifierChipTextActive: {
-    color: Colors.primaryCobalt,
+  certifierOptionTextActive: {
     fontWeight: '700',
+    color: Colors.accentSaffronDark,
   },
-  primaryActionButton: {
-    backgroundColor: Colors.primaryCobalt,
-    borderRadius: 10,
+  previewBtn: {
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.md,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: Spacing.md,
+    minHeight: Spacing.touchTargetMin,
+    justifyContent: 'center',
+    ...Shadows.sm,
   },
-  primaryActionButtonText: {
+  previewBtnText: {
+    ...Typography.buttonPrimary,
     color: '#FFFFFF',
-    fontSize: 15,
     fontWeight: '700',
   },
   previewCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    marginBottom: Spacing.lg,
   },
-  draftWatermarkBar: {
-    backgroundColor: '#78350F',
-    borderRadius: 6,
-    padding: 8,
-    marginBottom: 14,
+  copiedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.successSurface,
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
-  draftWatermarkText: {
-    fontSize: 11,
-    color: '#FEF3C7',
-    fontWeight: '700',
-    textAlign: 'center',
+  copiedBannerText: {
+    ...Typography.captionRegular,
+    color: Colors.success,
+    fontWeight: '600',
   },
   documentSheet: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.borderHighlight,
+    marginBottom: Spacing.md,
+    ...Shadows.elevated,
   },
-  docHeaderTitle: {
+  docHeader: {
+    alignItems: 'center',
+    borderBottomWidth: 1.5,
+    borderBottomColor: Colors.primaryNavy,
+    paddingBottom: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  docGovHeader: {
+    ...Typography.badgeText,
+    fontSize: 10,
+    color: Colors.mutedSlate,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  docMainTitle: {
+    ...Typography.sectionTitle,
+    fontSize: 17,
+    color: Colors.primaryNavy,
+    textAlign: 'center',
+  },
+  docSubTitle: {
+    ...Typography.captionRegular,
+    fontSize: 11,
+    color: Colors.mutedSlate,
+  },
+  docCertTitle: {
+    ...Typography.labelMedium,
+    fontSize: 13,
+    color: Colors.accentSaffronDark,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  docBody: {
+    gap: Spacing.sm,
+  },
+  docParagraph: {
+    ...Typography.bodyRegular,
     fontSize: 14,
+    lineHeight: 22,
+    color: Colors.textPrimary,
+  },
+  docBold: {
+    fontWeight: '700',
+    color: Colors.primaryNavy,
+  },
+  docHighlight: {
     fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
+    color: Colors.accentSaffronDark,
   },
-  docHeaderSub: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E3A8A',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#CBD5E1',
-    marginVertical: 12,
-  },
-  previewLine: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  previewLabel: {
-    width: '38%',
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  previewValue: {
-    width: '62%',
-    fontSize: 11,
-    color: '#0F172A',
-  },
-  signaturePlaceholderRow: {
+  docSignSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 24,
-    paddingTop: 12,
-  },
-  sigBox: {
-    width: '46%',
+    alignItems: 'flex-end',
+    marginTop: Spacing.xl,
+    paddingTop: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#94A3B8',
+    borderTopColor: Colors.borderSubtle,
+  },
+  docSignLabel: {
+    ...Typography.captionRegular,
+    fontSize: 12,
+    color: Colors.mutedSlate,
+  },
+  docSignLine: {
+    ...Typography.badgeText,
+    fontSize: 12,
+    color: Colors.primaryNavy,
+    borderTopWidth: 1,
+    borderTopColor: Colors.primaryNavy,
     paddingTop: 4,
-    alignItems: 'center',
+    textAlign: 'right',
   },
-  sigLabel: {
+  docSignerName: {
+    ...Typography.captionRegular,
+    fontWeight: '600',
+    fontSize: 12,
+    color: Colors.primaryNavy,
+    textAlign: 'right',
+  },
+  docSignerSub: {
+    ...Typography.captionRegular,
     fontSize: 10,
-    color: '#475569',
-    textAlign: 'center',
+    color: Colors.mutedSlate,
+    textAlign: 'right',
   },
-  actionButtonsContainer: {
-    gap: 10,
+  exportActionsContainer: {
+    gap: Spacing.sm,
   },
-  exportPdfButton: {
-    backgroundColor: Colors.constructionOrange,
+  exportPdfBtn: {
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.md,
     paddingVertical: 14,
-    borderRadius: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: Spacing.xs,
+    minHeight: Spacing.touchTargetMin,
+    ...Shadows.sm,
   },
-  exportPdfButtonText: {
+  exportPdfBtnText: {
+    ...Typography.buttonPrimary,
     color: '#FFFFFF',
-    fontSize: 15,
     fontWeight: '700',
   },
-  copyButton: {
-    backgroundColor: Colors.surfaceElevated,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
+  copyTextBtn: {
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
     borderColor: Colors.border,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    minHeight: Spacing.touchTargetMin,
   },
-  copyButtonText: {
-    color: Colors.textPrimary,
+  copyTextBtnText: {
+    ...Typography.buttonSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
-  editButton: {
-    paddingVertical: 10,
+  editBackBtn: {
+    paddingVertical: Spacing.sm,
     alignItems: 'center',
   },
-  editButtonText: {
-    color: Colors.primaryCobalt,
+  editBackBtnText: {
+    ...Typography.captionRegular,
     fontSize: 13,
+    color: Colors.mutedSlate,
     fontWeight: '600',
   },
 });

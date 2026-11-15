@@ -1,11 +1,15 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import {
+  AgentResponse,
+  ApplicationTaskItem,
   AssistantChatResponse,
+  DocumentAnalysisResult,
   EligibilityAssessmentResult,
   JourneyStatusSummary,
   Language,
   QuestionnaireAnswers,
+  WorkerProfile,
 } from '@haq/shared';
 
 export const getApiBaseUrl = (): string => {
@@ -42,6 +46,14 @@ export const getApiBaseUrl = (): string => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+let currentSessionToken: string | null = null;
+
+export const setSessionToken = (token: string | null) => {
+  currentSessionToken = token;
+};
+
+export const getSessionToken = (): string | null => currentSessionToken;
+
 export class ApiService {
   private static async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     if (!API_BASE_URL) {
@@ -51,12 +63,15 @@ export class ApiService {
     }
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(currentSessionToken ? { Authorization: `Bearer ${currentSessionToken}` } : {}),
+        ...((options?.headers as Record<string, string>) || {}),
+      };
+
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options?.headers || {}),
-        },
+        headers,
       });
 
       if (!res.ok) {
@@ -71,11 +86,15 @@ export class ApiService {
     }
   }
 
-  static async createSession(preferredLanguage: Language): Promise<{ id: string }> {
-    return this.request<{ id: string }>('/api/sessions', {
+  static async createSession(preferredLanguage: Language): Promise<{ id: string; token?: string }> {
+    const res = await this.request<{ id: string; token?: string }>('/api/sessions', {
       method: 'POST',
       body: JSON.stringify({ preferredLanguage }),
     });
+    if (res && res.token) {
+      setSessionToken(res.token);
+    }
+    return res;
   }
 
   static async assessEligibility(
@@ -150,6 +169,95 @@ export class ApiService {
         eventType,
         evidenceType,
         evidenceReference,
+      }),
+    });
+  }
+
+  // ================= HAQ 2.0 AI AGENT & VOICE SERVICES =================
+
+  static async chatWithAgent(params: {
+    sessionId: string;
+    message: string;
+    language?: Language;
+    voiceEnabled?: boolean;
+  }): Promise<AgentResponse> {
+    return this.request<AgentResponse>('/api/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  static async synthesizeVoice(params: {
+    text: string;
+    languageCode?: 'mr-IN' | 'hi-IN' | 'en-IN';
+    speaker?: string;
+  }): Promise<{ audioBase64: string; format: string }> {
+    return this.request('/api/voice/synthesize', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  static async transcribeVoice(params: {
+    audioBase64: string;
+    languageCode?: 'mr-IN' | 'hi-IN' | 'en-IN';
+  }): Promise<{ text: string; language: string; confidence?: number }> {
+    return this.request('/api/voice/transcribe', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  static async getWorkerProfile(sessionId: string): Promise<WorkerProfile> {
+    return this.request<WorkerProfile>(`/api/agent/profile/${sessionId}`);
+  }
+
+  static async updateWorkerProfile(sessionId: string, profile: Partial<WorkerProfile>): Promise<WorkerProfile> {
+    return this.request<WorkerProfile>('/api/agent/profile', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, profile }),
+    });
+  }
+
+  static async analyzeDocument(params: {
+    sessionId: string;
+    documentType: string;
+    textContent?: string;
+  }): Promise<DocumentAnalysisResult> {
+    return this.request<DocumentAnalysisResult>('/api/agent/documents/analyze', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  static async getApplicationTasks(sessionId: string): Promise<ApplicationTaskItem[]> {
+    return this.request<ApplicationTaskItem[]>(`/api/agent/tasks/${sessionId}`);
+  }
+
+  static async createApplicationTask(params: {
+    sessionId: string;
+    title: string;
+    description?: string;
+    priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+  }): Promise<ApplicationTaskItem> {
+    return this.request<ApplicationTaskItem>('/api/agent/tasks', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  static async updateApplicationTask(params: {
+    taskId: string;
+    sessionId: string;
+    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED';
+    userNotes?: string;
+  }): Promise<ApplicationTaskItem> {
+    return this.request<ApplicationTaskItem>(`/api/agent/tasks/${params.taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        sessionId: params.sessionId,
+        status: params.status,
+        userNotes: params.userNotes,
       }),
     });
   }

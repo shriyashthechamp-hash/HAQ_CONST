@@ -108,10 +108,14 @@ Create or verify `apps/api/.env`:
 PORT=4000
 NODE_ENV=development
 DATABASE_URL="postgresql://shriyasdeshmukh@localhost:5432/haq_db?schema=public"
-GROQ_API_KEY=gsk_your_groq_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=qwen/qwen3.8-27b
+SARVAM_API_KEY=your_sarvam_api_key_here
+SARVAM_TTS_MODEL=bulbul:v3
+SARVAM_TTS_SPEAKER=ritu
+SARVAM_STT_MODEL=saaras:v2
 ```
-*(Notice: Never place the Groq key in client code or commit `.env` to Git. `.gitignore` is pre-configured to strictly ignore it).*
+*(Notice: Never place API keys in client code or commit `.env` to Git. `.gitignore` is pre-configured to strictly ignore them).*
 
 ### Step 3: Run Database Migrations and Seed Official Data
 ```bash
@@ -126,12 +130,15 @@ npm run prisma:seed --workspace=@haq/api
 ```bash
 npm test
 ```
-All **13 integration tests** pass, verifying:
-- Health and source retrieval
-- Eligibility rule calculations (Satisfied, Ineligible, Incomplete)
-- Document checklist state updates and progress percentages
-- Strict journey stage transitions and submission evidence gating
-- Live Groq assistant responses and Marathi contractor letter drafting
+All **56 automated integration and agent tests** pass across 4 suites:
+- Provider integration & health checks (Groq, Sarvam AI)
+- Worker profile consent & privacy storage
+- Voice-first agent orchestration, multi-turn reasoning, and tool execution
+- Marathi voice synthesis (Sarvam `bulbul:v3`) and transcription (`saaras:v2`)
+- Document Intelligence & Form-V clause verification
+- Application task lifecycle orchestration (Pending, In Progress, Completed)
+- Cross-session security & isolation guardrails
+- Deterministic eligibility rule calculations & journey state transitions
 
 ---
 

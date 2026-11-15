@@ -15,9 +15,11 @@
     "@haq/shared": "*",
     "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.0",
+    "expo-av": "~15.0.2",
     "expo-build-properties": "~0.13.3",
     "expo-clipboard": "~7.0.0",
     "expo-constants": "~17.0.0",
+    "expo-file-system": "~18.0.12",
     "expo-font": "~13.0.4",
     "expo-linking": "~7.0.0",
     "expo-print": "~14.0.3",
@@ -36,6 +38,14 @@
   "devDependencies": {
     "@types/react": "~18.3.12",
     "typescript": "^5.4.5"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["expo-av", "@haq/shared", "query-string"],
+        "listUnknownPackages": false
+      }
+    }
   },
   "private": true
 }

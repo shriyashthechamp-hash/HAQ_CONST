@@ -46,5 +46,55 @@ haq/
 ## 5. Security & Privacy Guardrails
 - Zero storage of biometric identifiers, Aadhaar numbers, or sensitive financial documents.
 - Sanitized input and bounded prompt contexts to eliminate prompt injection risks.
-- Backend rate limiting on `/api/assistant/*` endpoints.
+- Backend rate limiting on `/api/assistant/*` and `/api/voice/*` endpoints.
 - Redacted logging (no sensitive PII or credentials in server logs).
+- Consent-based worker profile storage isolated per session.
+
+---
+
+## 6. HAQ 2.0 — Voice-First AI Agent Architecture
+
+HAQ 2.0 upgrades the system from a passive chatbot into an intelligent, voice-first, semi-autonomous welfare benefits agent:
+
+```
+[ Worker Mobile App (React Native + Expo) ]
+          │                  ▲
+   Voice Input (Mic)    Voice Playback (WAV)
+          │                  │
+          ▼                  │
+┌────────────────────────────────────────────────────────┐
+│              HAQ 2.0 Backend Gateway                   │
+├────────────────────────────────────────────────────────┤
+│ 1. Voice Ingestion:                                    │
+│    • Sarvam AI STT (`saaras:v2`, mr-IN / hi-IN / en-IN)│
+├────────────────────────────────────────────────────────┤
+│ 2. Agent Orchestrator:                                 │
+│    • Groq LLM Engine (`qwen/qwen3.8-27b`)              │
+│    • Tool-calling loop (Function Calling)              │
+│      - searchSchemes (MAHABOCW database search)        │
+│      - evaluateEligibility (Deterministic rule engine) │
+│      - updateWorkerProfile (Consent-driven storage)    │
+│      - getDocumentChecklist (Form-V & required docs)   │
+│      - createApplicationTask (Semi-autonomous tasks)  │
+├────────────────────────────────────────────────────────┤
+│ 3. Voice Generation:                                   │
+│    • Sarvam AI TTS (`bulbul:v3`, speaker `ritu`)       │
+│    • Natural cadence Marathi voice response audio      │
+├────────────────────────────────────────────────────────┤
+│ 4. Document Intelligence:                              │
+│    • Form-V clause & contractor signature analysis     │
+│    • Confidence score & localized corrective advice    │
+└────────────────────────────────────────────────────────┘
+```
+
+### Key Capabilities in 2.0:
+1. **Push-to-Talk Voice Guidance**:
+   - Workers speak directly in Marathi (`mr-IN`), transcribed via Sarvam `saaras:v2`.
+   - Responses are spoken back using natural Devanagari voice synthesis (`bulbul:v3`, speaker `ritu`).
+2. **Semi-Autonomous Task Management**:
+   - The agent creates actionable tasks (e.g., getting Form-V signed by site supervisor, linking bank account).
+   - Tasks are tracked in PostgreSQL with statuses: `PENDING`, `IN_PROGRESS`, `COMPLETED`, `BLOCKED`.
+3. **Verified Knowledge Grounding**:
+   - Every answer is grounded in official MAHABOCW sources (`MAHABOCW-SRC-REG-01`, `MAHABOCW-SRC-FORM-05`, etc.).
+   - Explicit disclaimers remind workers that guidance is advisory and official sanctions rest with MAHABOCW.
+

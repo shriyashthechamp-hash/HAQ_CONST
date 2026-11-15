@@ -9,7 +9,7 @@ export default function RootLayout() {
   return (
     <AppProvider>
       <View style={styles.container}>
-        <StatusBar style="light" backgroundColor={Colors.backgroundSecondary} />
+        <StatusBar style="dark" backgroundColor={Colors.background} />
         <Slot />
       </View>
     </AppProvider>

@@ -10,7 +10,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/theme/colors';
+import { Typography } from '../src/theme/typography';
+import { Spacing, Radius, Shadows } from '../src/theme/spacing';
 import { useApp } from '../src/context/AppContext';
 import { HeaderBar } from '../src/components/HeaderBar';
 import { BottomNav } from '../src/components/BottomNav';
@@ -39,13 +42,13 @@ export default function EligibilityScreen() {
   const totalSteps = 4;
 
   const trades = [
-    { key: 'Mason', label: t('q3Mason') },
-    { key: 'Carpenter', label: t('q3Carpenter') },
-    { key: 'Bar Bender', label: t('q3BarBender') },
-    { key: 'Electrician', label: t('q3Electrician') },
-    { key: 'Plumber', label: t('q3Plumber') },
-    { key: 'Painter', label: t('q3Painter') },
-    { key: 'Helper', label: t('q3Helper') },
+    { key: 'Mason', label: t('q3Mason'), icon: 'hammer-outline' as const },
+    { key: 'Carpenter', label: t('q3Carpenter'), icon: 'construct-outline' as const },
+    { key: 'Bar Bender', label: t('q3BarBender'), icon: 'hardware-chip-outline' as const },
+    { key: 'Electrician', label: t('q3Electrician'), icon: 'flash-outline' as const },
+    { key: 'Plumber', label: t('q3Plumber'), icon: 'water-outline' as const },
+    { key: 'Painter', label: t('q3Painter'), icon: 'color-palette-outline' as const },
+    { key: 'Helper', label: t('q3Helper'), icon: 'people-outline' as const },
   ];
 
   const handleNext = async () => {
@@ -55,17 +58,35 @@ export default function EligibilityScreen() {
     if (step === 1) {
       const ageNum = Number(answers.age);
       if (!answers.age || isNaN(ageNum) || ageNum <= 0) {
-        setErrorMsg('Please enter a valid age / कृपया योग्य वय प्रविष्ट करा.');
+        setErrorMsg(
+          language === 'mr'
+            ? 'कृपया तुमचे योग्य वय प्रविष्ट करा (उदा. ३२).'
+            : language === 'hi'
+            ? 'कृपया अपनी सही आयु दर्ज करें (उदा. ३२)।'
+            : 'Please enter a valid age (e.g. 32).'
+        );
         return;
       }
     } else if (step === 2) {
       if (!answers.workedDaysLast12Months) {
-        setErrorMsg('Please select or enter your work days / कृपया कामाचे दिवस निवडा.');
+        setErrorMsg(
+          language === 'mr'
+            ? 'कृपया मागील १२ महिन्यांतील कामाचे दिवस निवडा.'
+            : language === 'hi'
+            ? 'कृपया पिछले १२ महीनों के कार्य दिवस चुनें।'
+            : 'Please select your work days in the last 12 months.'
+        );
         return;
       }
     } else if (step === 3) {
       if (!answers.tradeType) {
-        setErrorMsg('Please select your trade role / कृपया तुमचा व्यवसाय निवडा.');
+        setErrorMsg(
+          language === 'mr'
+            ? 'कृपया तुमचा मुख्य बांधकाम व्यवसाय निवडा.'
+            : language === 'hi'
+            ? 'कृपया अपना मुख्य निर्माण कार्य चुनें।'
+            : 'Please select your primary construction trade.'
+        );
         return;
       }
     }
@@ -151,7 +172,58 @@ export default function EligibilityScreen() {
               : []),
           ],
           unresolvedChecks: [],
-          failedChecks: [],
+          failedChecks: [
+            ...(!isAgeOk
+              ? [
+                  {
+                    ruleKey: 'RULE_AGE_RANGE_FAILED',
+                    title: { en: 'Age Requirement Unmet', mr: 'वयाची अट पूर्ण होत नाही', hi: 'आयु मानदंड अपूर्ण' },
+                    status: 'FAILED' as const,
+                    explanation: {
+                      en: `Age ${ageNum} is outside 18–60 statutory bracket.`,
+                      mr: `वय ${ageNum} १८ ते ६० या अधिकृत वयोगटाबाहेर आहे.`,
+                      hi: `आयु ${ageNum} वर्ष १८ से ६० के वैधानिक दायरे से बाहर है।`,
+                    },
+                    sourceCitation: {
+                      sourceId: 'MAHABOCW-SRC-REG-01',
+                      title: 'MAHABOCW Official Registration Criteria',
+                      url: 'https://mahabocw.in/en/workers-registration/',
+                      excerpt: 'Age must be between 18 and 60 years.',
+                    },
+                    nextStepRecommendation: {
+                      en: 'Worker must be aged 18 to 60 at the date of registration.',
+                      mr: 'नोंदणीच्या दिनांकास वय १८ ते ६० वर्षांच्या दरम्यान असणे आवश्यक आहे.',
+                      hi: 'पंजीकरण की तिथि पर आयु १८ से ६० वर्ष के मध्य होनी चाहिए।',
+                    },
+                  },
+                ]
+              : []),
+            ...(answers.workedDaysLast12Months === 'under_90'
+              ? [
+                  {
+                    ruleKey: 'RULE_90_DAYS_FAILED',
+                    title: { en: '90 Days Work Incomplete', mr: '९० दिवस काम अपूर्ण', hi: '९० दिन कार्य अपूर्ण' },
+                    status: 'FAILED' as const,
+                    explanation: {
+                      en: 'Must complete at least 90 days construction work in past 12 months under Rule 282.',
+                      mr: 'नियम २८२ अन्वये मागील १२ महिन्यांत किमान ९० दिवस बांधकाम काम पूर्ण असणे आवश्यक आहे.',
+                      hi: 'नियम २८२ के तहत पिछले १२ महीनों में न्यूनतम ९० दिन निर्माण कार्य आवश्यक है।',
+                    },
+                    sourceCitation: {
+                      sourceId: 'MAHABOCW-SRC-FORM-05',
+                      title: 'MAHABOCW Form-V 90-Day Certificate',
+                      url: 'https://mahabocw.in/en/download/',
+                      excerpt: 'Form-V certificate of 90 days work from contractor or Gramsevak.',
+                    },
+                    nextStepRecommendation: {
+                      en: 'Complete 90 days on construction sites and obtain Form-V from contractor.',
+                      mr: 'बांधकाम साइटवर ९० दिवस काम पूर्ण करा व कंत्राटदाराकडून फॉर्म-५ घ्या.',
+                      hi: 'निर्माण साइट पर ९० दिन कार्य पूर्ण करें और ठेकेदार से फॉर्म-५ प्राप्त करें।',
+                    },
+                  },
+                ]
+              : []),
+          ],
           disclaimer: {
             en: 'Preliminary guidance only. Final eligibility is determined by MAHABOCW upon official application.',
             mr: 'केवळ प्राथमिक मार्गदर्शन. अंतिम निर्णय अधिकृत MAHABOCW मंडळाचा असतो.',
@@ -183,7 +255,7 @@ export default function EligibilityScreen() {
       <HeaderBar />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header Title */}
+        {/* Title Header */}
         <View style={styles.titleSection}>
           <Text style={styles.screenTitle}>{t('eligibilityTitle')}</Text>
           <Text style={styles.screenSubtitle}>{t('eligibilitySubtitle')}</Text>
@@ -191,17 +263,38 @@ export default function EligibilityScreen() {
 
         {!result ? (
           <View style={styles.cardContainer}>
-            {/* Progress Indicator */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBarBg}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    { width: `${(step / totalSteps) * 100}%` },
-                  ]}
-                />
+            {/* Modern Step Indicator */}
+            <View style={styles.stepperContainer}>
+              <View style={styles.stepperRow}>
+                {[1, 2, 3, 4].map((s) => (
+                  <View key={s} style={styles.stepItemWrapper}>
+                    <View
+                      style={[
+                        styles.stepDot,
+                        step === s && styles.stepDotActive,
+                        step > s && styles.stepDotCompleted,
+                      ]}
+                    >
+                      {step > s ? (
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      ) : (
+                        <Text style={[styles.stepDotText, step === s && styles.stepDotTextActive]}>
+                          {s}
+                        </Text>
+                      )}
+                    </View>
+                    {s < totalSteps && (
+                      <View
+                        style={[
+                          styles.stepConnector,
+                          step > s && styles.stepConnectorCompleted,
+                        ]}
+                      />
+                    )}
+                  </View>
+                ))}
               </View>
-              <Text style={styles.stepIndicatorText}>
+              <Text style={styles.stepProgressText}>
                 {t('stepOf', { current: step, total: totalSteps })}
               </Text>
             </View>
@@ -209,6 +302,7 @@ export default function EligibilityScreen() {
             {/* Error Message */}
             {errorMsg && (
               <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={18} color={Colors.error} />
                 <Text style={styles.errorBannerText}>{errorMsg}</Text>
               </View>
             )}
@@ -216,7 +310,19 @@ export default function EligibilityScreen() {
             {/* QUESTION 1: AGE */}
             {step === 1 && (
               <View style={styles.questionBox}>
-                <Text style={styles.questionTitle}>{t('q1Title')}</Text>
+                <View style={styles.questionHeaderRow}>
+                  <Text style={styles.questionTitle}>{t('q1Title')}</Text>
+                  <VoiceGuidanceButton
+                    textToSpeak={
+                      language === 'mr'
+                        ? 'नोंदणीसाठी कामगाराचे वय १८ ते ६० वर्षांच्या दरम्यान असणे आवश्यक आहे. तुमचे वय प्रविष्ट करा.'
+                        : language === 'hi'
+                        ? 'पंजीकरण हेतु श्रमिक की आयु १८ से ६० वर्ष के मध्य होनी चाहिए। अपनी आयु दर्ज करें।'
+                        : 'Worker must be between 18 and 60 years old to register with the Board.'
+                    }
+                    language={language}
+                  />
+                </View>
                 <Text style={styles.questionDesc}>{t('q1Desc')}</Text>
 
                 <TextInput
@@ -229,7 +335,9 @@ export default function EligibilityScreen() {
                   maxLength={3}
                 />
 
-                <Text style={styles.quickSelectLabel}>Quick Select / जलद निवडा:</Text>
+                <Text style={styles.quickSelectLabel}>
+                  {language === 'mr' ? 'जलद निवडा:' : language === 'hi' ? 'जल्दी चुनें:' : 'Quick Select:'}
+                </Text>
                 <View style={styles.chipRow}>
                   {[22, 28, 35, 42, 50, 58].map((age) => (
                     <TouchableOpacity
@@ -239,6 +347,7 @@ export default function EligibilityScreen() {
                         styles.chip,
                         Number(answers.age) === age && styles.chipSelected,
                       ]}
+                      activeOpacity={0.8}
                     >
                       <Text
                         style={[
@@ -253,9 +362,13 @@ export default function EligibilityScreen() {
                 </View>
 
                 <View style={styles.contextHelpBox}>
-                  <Text style={styles.contextHelpIcon}>ℹ️</Text>
+                  <Ionicons name="information-circle-outline" size={18} color={Colors.primaryNavy} />
                   <Text style={styles.contextHelpText}>
-                    Rule: Section 12 of BOCW Act requires ages 18 to 60.
+                    {language === 'mr'
+                      ? 'नियम: इमारत व इतर बांधकाम कामगार कायदा, कलम १२ अन्वये वय १८ ते ६० वर्षे अनिवार्य आहे.'
+                      : language === 'hi'
+                      ? 'नियम: भवन एवं अन्य निर्माण श्रमिक अधिनियम की धारा १२ के तहत आयु १८ से ६० वर्ष अनिवार्य है।'
+                      : 'Rule: Section 12 of the BOCW Act requires worker age between 18 and 60 years.'}
                   </Text>
                 </View>
               </View>
@@ -264,7 +377,19 @@ export default function EligibilityScreen() {
             {/* QUESTION 2: 90 DAYS WORK */}
             {step === 2 && (
               <View style={styles.questionBox}>
-                <Text style={styles.questionTitle}>{t('q2Title')}</Text>
+                <View style={styles.questionHeaderRow}>
+                  <Text style={styles.questionTitle}>{t('q2Title')}</Text>
+                  <VoiceGuidanceButton
+                    textToSpeak={
+                      language === 'mr'
+                        ? 'अधिकृत नियमांनुसार मागील बारा महिन्यांत किमान नव्वद दिवस बांधकाम कामाचा अनुभव बंधनकारक आहे.'
+                        : language === 'hi'
+                        ? 'आधिकारिक नियमों के अनुसार पिछले बारह महीनों में न्यूनतम नब्बे दिन का निर्माण कार्य आवश्यक है।'
+                        : 'Official regulations require at least 90 days of construction work in the last 12 months.'
+                    }
+                    language={language}
+                  />
+                </View>
                 <Text style={styles.questionDesc}>{t('q2Desc')}</Text>
 
                 <View style={styles.optionStack}>
@@ -274,6 +399,7 @@ export default function EligibilityScreen() {
                       styles.choiceCard,
                       answers.workedDaysLast12Months === 'under_90' && styles.choiceCardSelected,
                     ]}
+                    activeOpacity={0.85}
                   >
                     <View style={styles.choiceCardHeader}>
                       <Text style={styles.choiceCardTitle}>{t('q2Opt1')}</Text>
@@ -281,7 +407,13 @@ export default function EligibilityScreen() {
                         {answers.workedDaysLast12Months === 'under_90' && <View style={styles.radioFill} />}
                       </View>
                     </View>
-                    <Text style={styles.choiceCardSub}>May require completing more site days before filing</Text>
+                    <Text style={styles.choiceCardSub}>
+                      {language === 'mr'
+                        ? 'अर्जासाठी आणखी काही दिवस साइटवर काम पूर्ण करणे आवश्यक आहे'
+                        : language === 'hi'
+                        ? 'आवेदन हेतु कार्य दिवस पूरे करने की आवश्यकता होगी'
+                        : 'May require completing more site days before filing'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -290,6 +422,7 @@ export default function EligibilityScreen() {
                       styles.choiceCard,
                       answers.workedDaysLast12Months === '90_180' && styles.choiceCardSelected,
                     ]}
+                    activeOpacity={0.85}
                   >
                     <View style={styles.choiceCardHeader}>
                       <Text style={styles.choiceCardTitle}>{t('q2Opt2')}</Text>
@@ -297,7 +430,13 @@ export default function EligibilityScreen() {
                         {answers.workedDaysLast12Months === '90_180' && <View style={styles.radioFill} />}
                       </View>
                     </View>
-                    <Text style={styles.choiceCardSub}>Meets official 90-day threshold (Form-V eligible)</Text>
+                    <Text style={styles.choiceCardSub}>
+                      {language === 'mr'
+                        ? 'अधिकृत ९० दिवसांची अट पूर्ण होते (फॉर्म-५ साठी पात्र)'
+                        : language === 'hi'
+                        ? 'आधिकारिक ९० दिन की शर्त पूर्ण (फॉर्म-५ हेतु पात्र)'
+                        : 'Meets official 90-day threshold (Form-V eligible)'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -306,6 +445,7 @@ export default function EligibilityScreen() {
                       styles.choiceCard,
                       answers.workedDaysLast12Months === '180_plus' && styles.choiceCardSelected,
                     ]}
+                    activeOpacity={0.85}
                   >
                     <View style={styles.choiceCardHeader}>
                       <Text style={styles.choiceCardTitle}>{t('q2Opt3')}</Text>
@@ -313,7 +453,13 @@ export default function EligibilityScreen() {
                         {answers.workedDaysLast12Months === '180_plus' && <View style={styles.radioFill} />}
                       </View>
                     </View>
-                    <Text style={styles.choiceCardSub}>Comfortably meets criteria across one or multiple sites</Text>
+                    <Text style={styles.choiceCardSub}>
+                      {language === 'mr'
+                        ? 'एका किंवा अनेक साइट्सवर पुरेसा कामाचा अनुभव आहे'
+                        : language === 'hi'
+                        ? 'एक या अधिक साइट्स पर पर्याप्त कार्य अनुभव है'
+                        : 'Comfortably meets criteria across one or multiple sites'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -322,7 +468,19 @@ export default function EligibilityScreen() {
             {/* QUESTION 3: TRADE ROLE */}
             {step === 3 && (
               <View style={styles.questionBox}>
-                <Text style={styles.questionTitle}>{t('q3Title')}</Text>
+                <View style={styles.questionHeaderRow}>
+                  <Text style={styles.questionTitle}>{t('q3Title')}</Text>
+                  <VoiceGuidanceButton
+                    textToSpeak={
+                      language === 'mr'
+                        ? 'इमारत किंवा इतर बांधकाम अनुसूचीमध्ये समाविष्ट असलेला तुमचा मुख्य व्यवसाय निवडा.'
+                        : language === 'hi'
+                        ? 'भवन या अन्य निर्माण कार्य सूची में सम्मिलित अपना मुख्य व्यवसाय चुनें।'
+                        : 'Select your primary construction trade recognized under the regulations.'
+                    }
+                    language={language}
+                  />
+                </View>
                 <Text style={styles.questionDesc}>{t('q3Desc')}</Text>
 
                 <View style={styles.tradeGrid}>
@@ -333,7 +491,14 @@ export default function EligibilityScreen() {
                         key={item.key}
                         onPress={() => setAnswers({ ...answers, tradeType: item.key })}
                         style={[styles.tradeItem, isSelected && styles.tradeItemSelected]}
+                        activeOpacity={0.85}
                       >
+                        <Ionicons
+                          name={item.icon}
+                          size={20}
+                          color={isSelected ? Colors.accentSaffronDark : Colors.mutedSlate}
+                          style={{ marginBottom: 4 }}
+                        />
                         <Text style={[styles.tradeText, isSelected && styles.tradeTextSelected]}>
                           {item.label}
                         </Text>
@@ -344,10 +509,22 @@ export default function EligibilityScreen() {
               </View>
             )}
 
-            {/* QUESTION 4: RESIDENCY & JURISDICTION */}
+            {/* QUESTION 4: RESIDENCY */}
             {step === 4 && (
               <View style={styles.questionBox}>
-                <Text style={styles.questionTitle}>{t('q4Title')}</Text>
+                <View style={styles.questionHeaderRow}>
+                  <Text style={styles.questionTitle}>{t('q4Title')}</Text>
+                  <VoiceGuidanceButton
+                    textToSpeak={
+                      language === 'mr'
+                        ? 'तुम्ही महाराष्ट्रात राहता किंवा बांधकाम साइटवर काम करत असल्यास निवडा.'
+                        : language === 'hi'
+                        ? 'यदि आप महाराष्ट्र में रहते हैं या निर्माण स्थल पर काम करते हैं तो चुनें।'
+                        : 'Confirm whether you live or work in Maharashtra.'
+                    }
+                    language={language}
+                  />
+                </View>
                 <Text style={styles.questionDesc}>{t('q4Desc')}</Text>
 
                 <View style={styles.optionStack}>
@@ -357,6 +534,7 @@ export default function EligibilityScreen() {
                       styles.choiceCard,
                       answers.isMaharashtraResident === true && styles.choiceCardSelected,
                     ]}
+                    activeOpacity={0.85}
                   >
                     <View style={styles.choiceCardHeader}>
                       <Text style={styles.choiceCardTitle}>{t('q4Yes')}</Text>
@@ -364,7 +542,13 @@ export default function EligibilityScreen() {
                         {answers.isMaharashtraResident === true && <View style={styles.radioFill} />}
                       </View>
                     </View>
-                    <Text style={styles.choiceCardSub}>Direct registration under Pune / Maharashtra Board</Text>
+                    <Text style={styles.choiceCardSub}>
+                      {language === 'mr'
+                        ? 'महाराष्ट्र कल्याण मंडळाकडे थेट नोंदणीसाठी पात्र'
+                        : language === 'hi'
+                        ? 'महाराष्ट्र कल्याण बोर्ड में सीधे पंजीकरण हेतु पात्र'
+                        : 'Direct registration under Pune / Maharashtra Board'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -373,6 +557,7 @@ export default function EligibilityScreen() {
                       styles.choiceCard,
                       answers.isMaharashtraResident === false && styles.choiceCardSelected,
                     ]}
+                    activeOpacity={0.85}
                   >
                     <View style={styles.choiceCardHeader}>
                       <Text style={styles.choiceCardTitle}>{t('q4No')}</Text>
@@ -381,7 +566,11 @@ export default function EligibilityScreen() {
                       </View>
                     </View>
                     <Text style={styles.choiceCardSub}>
-                      Eligible if working 90+ days on Maharashtra sites; needs employer certificate
+                      {language === 'mr'
+                        ? 'महाराष्ट्रातील साइटवर ९० दिवस काम केल्यास नियोक्त्याचे प्रमाणपत्र आवश्यक'
+                        : language === 'hi'
+                        ? 'महाराष्ट्र की साइट पर ९० दिन कार्य करने पर नियोक्ता प्रमाण पत्र आवश्यक'
+                        : 'Eligible if working 90+ days on Maharashtra sites with employer certificate'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -391,7 +580,7 @@ export default function EligibilityScreen() {
             {/* Bottom Actions: Back and Continue */}
             <View style={styles.actionRow}>
               {step > 1 && (
-                <TouchableOpacity onPress={handleBack} style={styles.secondaryButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.secondaryButton} activeOpacity={0.8}>
                   <Text style={styles.secondaryButtonText}>{t('back')}</Text>
                 </TouchableOpacity>
               )}
@@ -400,12 +589,13 @@ export default function EligibilityScreen() {
                 onPress={handleNext}
                 style={[styles.continueButton, step === 1 && { flex: 1 }]}
                 disabled={loading}
+                activeOpacity={0.85}
               >
                 {loading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.continueButtonText}>
-                    {step === totalSteps ? t('continue') : t('continue')} →
+                    {step === totalSteps ? (language === 'mr' ? 'पात्रता तपासा' : language === 'hi' ? 'जांच करें' : 'Evaluate') : t('continue')} →
                   </Text>
                 )}
               </TouchableOpacity>
@@ -423,13 +613,23 @@ export default function EligibilityScreen() {
                 result.assessmentStatus === 'INELIGIBLE' && styles.bannerIneligible,
               ]}
             >
-              <Text style={styles.resultBannerIcon}>
-                {result.assessmentStatus === 'PRELIMINARY_SATISFIED'
-                  ? '✅'
-                  : result.assessmentStatus === 'NEEDS_VERIFICATION'
-                  ? '⚠️'
-                  : '❌'}
-              </Text>
+              <Ionicons
+                name={
+                  result.assessmentStatus === 'PRELIMINARY_SATISFIED'
+                    ? 'checkmark-circle'
+                    : result.assessmentStatus === 'NEEDS_VERIFICATION'
+                    ? 'warning'
+                    : 'close-circle'
+                }
+                size={32}
+                color={
+                  result.assessmentStatus === 'PRELIMINARY_SATISFIED'
+                    ? Colors.success
+                    : result.assessmentStatus === 'NEEDS_VERIFICATION'
+                    ? Colors.warning
+                    : Colors.error
+                }
+              />
               <View style={styles.resultBannerTextCol}>
                 <Text style={styles.resultBannerStatusTitle}>
                   {result.assessmentStatus === 'PRELIMINARY_SATISFIED'
@@ -439,13 +639,13 @@ export default function EligibilityScreen() {
                     : t('statusIneligible')}
                 </Text>
                 <Text style={styles.resultBannerStatusSub}>
-                  Rule Version: {result.ruleVersion}
+                  MAHABOCW Rule Engine • {result.ruleVersion}
                 </Text>
               </View>
             </View>
 
             {/* Accessible Voice Guidance Playback */}
-            <View style={{ marginBottom: 16 }}>
+            <View style={{ marginBottom: Spacing.md }}>
               <VoiceGuidanceButton
                 textToSpeak={
                   result.assessmentStatus === 'PRELIMINARY_SATISFIED'
@@ -463,34 +663,9 @@ export default function EligibilityScreen() {
                 {result.satisfiedChecks.map((item, idx) => (
                   <View key={idx} style={styles.checkCard}>
                     <View style={styles.checkCardRow}>
-                      <Text style={styles.checkPassBadge}>✓ SATISFIED</Text>
-                      <Text style={styles.checkTitle}>{item.title[language] || item.title.en}</Text>
-                    </View>
-                    <Text style={styles.checkExplanation}>{item.explanation[language] || item.explanation.en}</Text>
-
-                    {item.sourceCitation && <SourceCitationCard citation={item.sourceCitation} />}
-
-                    <View style={styles.recommendationBox}>
-                      <Text style={styles.recommendationLabel}>{t('nextStepsRecommendation')}:</Text>
-                      <Text style={styles.recommendationText}>
-                        {item.nextStepRecommendation[language] || item.nextStepRecommendation.en}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Unresolved Checks Section */}
-            {result.unresolvedChecks.length > 0 && (
-              <View style={styles.checkSection}>
-                <Text style={[styles.checkSectionHeader, { color: Colors.warning }]}>
-                  {t('unresolvedHeader')}
-                </Text>
-                {result.unresolvedChecks.map((item, idx) => (
-                  <View key={idx} style={[styles.checkCard, { borderColor: Colors.warningBorder }]}>
-                    <View style={styles.checkCardRow}>
-                      <Text style={styles.checkWarnBadge}>⚠ NEEDS VERIFICATION</Text>
+                      <View style={styles.checkPassBadgeWrap}>
+                        <Text style={styles.checkPassBadge}>✓ पूर्ण</Text>
+                      </View>
                       <Text style={styles.checkTitle}>{item.title[language] || item.title.en}</Text>
                     </View>
                     <Text style={styles.checkExplanation}>{item.explanation[language] || item.explanation.en}</Text>
@@ -517,37 +692,39 @@ export default function EligibilityScreen() {
                 {result.failedChecks.map((item, idx) => (
                   <View key={idx} style={[styles.checkCard, { borderColor: Colors.errorBorder }]}>
                     <View style={styles.checkCardRow}>
-                      <Text style={styles.checkFailBadge}>✕ UNMET</Text>
+                      <View style={styles.checkFailBadgeWrap}>
+                        <Text style={styles.checkFailBadge}>✕ अपूर्ण</Text>
+                      </View>
                       <Text style={styles.checkTitle}>{item.title[language] || item.title.en}</Text>
                     </View>
                     <Text style={styles.checkExplanation}>{item.explanation[language] || item.explanation.en}</Text>
-
-                    {item.sourceCitation && <SourceCitationCard citation={item.sourceCitation} />}
                   </View>
                 ))}
               </View>
             )}
 
-            {/* Official Disclaimer Box */}
+            {/* Official Legal Disclaimer Box */}
             <View style={styles.disclaimerCard}>
-              <Text style={styles.disclaimerIcon}>⚖️</Text>
+              <Ionicons name="scale-outline" size={20} color={Colors.mutedSlate} />
               <Text style={styles.disclaimerText}>
                 {result.disclaimer[language] || result.disclaimer.en}
               </Text>
             </View>
 
-            {/* Action to proceed to checklist */}
+            {/* Primary Action Button: Proceed to Documents */}
             <TouchableOpacity
               onPress={() => router.push('/documents')}
               style={styles.proceedButton}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel={t('proceedToChecklist')}
             >
               <Text style={styles.proceedButtonText}>{t('proceedToChecklist')}</Text>
-              <Text style={styles.proceedButtonArrow}>→</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleBack} style={styles.recheckButton}>
-              <Text style={styles.recheckButtonText}>← Re-check Answers / पुन्हा तपासा</Text>
+            <TouchableOpacity onPress={handleBack} style={styles.recheckButton} activeOpacity={0.8}>
+              <Text style={styles.recheckButtonText}>← {language === 'mr' ? 'पुन्हा तपासा' : language === 'hi' ? 'पुनः जांचें' : 'Re-check Answers'}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -561,157 +738,196 @@ export default function EligibilityScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundWarm,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
   },
   titleSection: {
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   screenTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    ...Typography.screenTitle,
+    color: Colors.primaryNavy,
     marginBottom: 4,
   },
   screenSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
+    color: Colors.mutedSlate,
   },
   cardContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderSubtle,
+    ...Shadows.card,
   },
-  progressContainer: {
-    marginBottom: 18,
+  stepperContainer: {
+    marginBottom: Spacing.lg,
   },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 8,
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
   },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: Colors.constructionOrange,
+  stepItemWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  stepIndicatorText: {
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.borderSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepDotActive: {
+    backgroundColor: Colors.accentSaffron,
+  },
+  stepDotCompleted: {
+    backgroundColor: Colors.primaryNavy,
+  },
+  stepDotText: {
+    ...Typography.badgeText,
     fontSize: 12,
-    color: Colors.textMuted,
-    fontWeight: '600',
-    textAlign: 'right',
+    color: Colors.mutedSlate,
+  },
+  stepDotTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  stepConnector: {
+    width: 36,
+    height: 3,
+    backgroundColor: Colors.borderSubtle,
+    marginHorizontal: 4,
+  },
+  stepConnectorCompleted: {
+    backgroundColor: Colors.primaryNavy,
+  },
+  stepProgressText: {
+    ...Typography.captionRegular,
+    fontSize: 12,
+    color: Colors.mutedSlate,
+    textAlign: 'center',
+    marginTop: 4,
   },
   errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.errorSurface,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.errorBorder,
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 14,
+    gap: Spacing.xs,
   },
   errorBannerText: {
+    ...Typography.captionRegular,
     color: Colors.error,
-    fontSize: 13,
-    fontWeight: '600',
+    flex: 1,
   },
   questionBox: {
-    marginBottom: 18,
+    marginBottom: Spacing.lg,
+  },
+  questionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
   },
   questionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 6,
+    ...Typography.sectionTitle,
+    fontSize: 16,
+    lineHeight: 22,
+    color: Colors.primaryNavy,
+    flex: 1,
   },
   questionDesc: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
+    color: Colors.mutedSlate,
+    marginBottom: Spacing.md,
     lineHeight: 18,
-    marginBottom: 16,
   },
   textInput: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
+    backgroundColor: Colors.backgroundWarm,
     borderWidth: 1.5,
-    borderColor: Colors.borderHighlight,
-    color: Colors.textPrimary,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
     fontSize: 18,
+    color: Colors.primaryNavy,
     fontWeight: '700',
-    marginBottom: 14,
+    marginBottom: Spacing.md,
   },
   quickSelectLabel: {
+    ...Typography.captionRegular,
     fontSize: 12,
-    color: Colors.textMuted,
-    marginBottom: 8,
-    fontWeight: '600',
+    color: Colors.mutedSlate,
+    marginBottom: Spacing.xs,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   chip: {
-    backgroundColor: Colors.backgroundSecondary,
-    paddingVertical: 8,
+    backgroundColor: Colors.backgroundWarm,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   chipSelected: {
-    borderColor: Colors.constructionOrange,
-    backgroundColor: Colors.constructionOrangeGlow,
+    backgroundColor: Colors.saffronOrangeLight,
+    borderColor: Colors.accentSaffron,
   },
   chipText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    ...Typography.badgeText,
+    fontSize: 12,
+    color: Colors.textPrimary,
   },
   chipTextSelected: {
-    color: Colors.constructionOrange,
+    color: Colors.accentSaffronDark,
     fontWeight: '700',
   },
   contextHelpBox: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(22, 119, 255, 0.08)',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(22, 119, 255, 0.2)',
-  },
-  contextHelpIcon: {
-    fontSize: 14,
+    backgroundColor: Colors.warmIvoryAlt,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    gap: Spacing.xs,
+    alignItems: 'flex-start',
   },
   contextHelpText: {
+    ...Typography.captionRegular,
     fontSize: 12,
-    color: '#93C5FD',
+    lineHeight: 16,
+    color: Colors.textSecondary,
     flex: 1,
   },
   optionStack: {
-    gap: 12,
+    gap: Spacing.sm,
   },
   choiceCard: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: Colors.backgroundWarm,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
     borderWidth: 1.5,
     borderColor: Colors.border,
   },
   choiceCardSelected: {
-    borderColor: Colors.constructionOrange,
-    backgroundColor: Colors.constructionOrangeGlow,
+    backgroundColor: Colors.saffronOrangeLight,
+    borderColor: Colors.accentSaffron,
   },
   choiceCardHeader: {
     flexDirection: 'row',
@@ -720,16 +936,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   choiceCardTitle: {
+    ...Typography.cardTitle,
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    color: Colors.primaryNavy,
+  },
+  choiceCardSub: {
+    ...Typography.captionRegular,
+    fontSize: 12,
+    color: Colors.mutedSlate,
+    lineHeight: 16,
   },
   radioDot: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.textMuted,
+    borderWidth: 2,
+    borderColor: Colors.borderHighlight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -737,82 +959,82 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.constructionOrange,
-  },
-  choiceCardSub: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 16,
+    backgroundColor: Colors.accentSaffron,
   },
   tradeGrid: {
-    gap: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
   },
   tradeItem: {
-    backgroundColor: Colors.backgroundSecondary,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
+    width: '48%',
+    backgroundColor: Colors.backgroundWarm,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    minHeight: 48,
+    minHeight: 74,
     justifyContent: 'center',
   },
   tradeItemSelected: {
-    borderColor: Colors.constructionOrange,
-    backgroundColor: Colors.constructionOrangeGlow,
+    backgroundColor: Colors.saffronOrangeLight,
+    borderColor: Colors.accentSaffron,
   },
   tradeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
+    fontSize: 13,
+    color: Colors.primaryNavy,
+    lineHeight: 17,
   },
   tradeTextSelected: {
-    color: Colors.textPrimary,
     fontWeight: '700',
+    color: Colors.accentSaffronDark,
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 10,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
   secondaryButton: {
-    flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    minHeight: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    backgroundColor: Colors.backgroundWarm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: Spacing.touchTargetMin,
   },
   secondaryButtonText: {
-    color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: '600',
+    ...Typography.buttonSecondary,
+    fontSize: 14,
   },
   continueButton: {
     flex: 2,
-    backgroundColor: Colors.constructionOrange,
-    borderRadius: 12,
-    minHeight: 48,
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: Spacing.touchTargetMin,
+    ...Shadows.sm,
   },
   continueButtonText: {
+    ...Typography.buttonPrimary,
     color: '#FFFFFF',
-    fontSize: 16,
     fontWeight: '700',
   },
   resultsContainer: {
-    gap: 14,
+    gap: Spacing.md,
   },
   resultBanner: {
-    borderRadius: 14,
-    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
     borderWidth: 1.5,
+    gap: Spacing.sm,
   },
   bannerSatisfied: {
     backgroundColor: Colors.successSurface,
@@ -826,147 +1048,133 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.errorSurface,
     borderColor: Colors.errorBorder,
   },
-  resultBannerIcon: {
-    fontSize: 28,
-  },
   resultBannerTextCol: {
     flex: 1,
   },
   resultBannerStatusTitle: {
+    ...Typography.sectionTitle,
     fontSize: 17,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 2,
+    color: Colors.primaryNavy,
   },
   resultBannerStatusSub: {
-    fontSize: 12,
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
+    fontSize: 11,
+    color: Colors.mutedSlate,
   },
   checkSection: {
-    marginTop: 6,
+    gap: Spacing.sm,
   },
   checkSectionHeader: {
+    ...Typography.sectionTitle,
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.success,
-    marginBottom: 8,
+    color: Colors.primaryNavy,
   },
   checkCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: Colors.cardSurface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 10,
+    borderColor: Colors.borderSubtle,
+    gap: Spacing.xs,
+    ...Shadows.sm,
   },
   checkCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
+    gap: Spacing.xs,
+  },
+  checkPassBadgeWrap: {
+    backgroundColor: Colors.successSurface,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
   },
   checkPassBadge: {
-    backgroundColor: Colors.successSurface,
+    ...Typography.badgeText,
+    fontSize: 11,
     color: Colors.success,
-    fontSize: 10,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
   },
-  checkWarnBadge: {
-    backgroundColor: Colors.warningSurface,
-    color: Colors.warning,
-    fontSize: 10,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+  checkFailBadgeWrap: {
+    backgroundColor: Colors.errorSurface,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
   },
   checkFailBadge: {
-    backgroundColor: Colors.errorSurface,
+    ...Typography.badgeText,
+    fontSize: 11,
     color: Colors.error,
-    fontSize: 10,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
   },
   checkTitle: {
+    ...Typography.cardTitle,
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    color: Colors.primaryNavy,
     flex: 1,
   },
   checkExplanation: {
+    ...Typography.bodyRegular,
     fontSize: 13,
-    color: Colors.textSecondary,
     lineHeight: 18,
-    marginBottom: 8,
+    color: Colors.textSecondary,
   },
   recommendationBox: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.constructionOrange,
+    backgroundColor: Colors.backgroundWarm,
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    marginTop: Spacing.xs,
   },
   recommendationLabel: {
+    ...Typography.badgeText,
     fontSize: 11,
-    fontWeight: '700',
-    color: Colors.constructionOrange,
-    marginBottom: 2,
+    color: Colors.accentSaffronDark,
   },
   recommendationText: {
+    ...Typography.captionRegular,
     fontSize: 12,
     color: Colors.textPrimary,
-    lineHeight: 16,
   },
   disclaimerCard: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 14,
     flexDirection: 'row',
-    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  disclaimerIcon: {
-    fontSize: 18,
+    borderColor: Colors.borderSubtle,
+    alignItems: 'flex-start',
+    gap: Spacing.xs,
   },
   disclaimerText: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    lineHeight: 17,
+    ...Typography.captionRegular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: Colors.mutedSlate,
     flex: 1,
   },
   proceedButton: {
-    backgroundColor: Colors.constructionOrange,
-    borderRadius: 14,
-    minHeight: 52,
+    backgroundColor: Colors.accentSaffron,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.lg,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.xs,
+    minHeight: Spacing.touchTargetMin,
+    ...Shadows.sm,
   },
   proceedButtonText: {
+    ...Typography.buttonPrimary,
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  proceedButtonArrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
     fontWeight: '700',
   },
   recheckButton: {
+    paddingVertical: Spacing.sm,
     alignItems: 'center',
-    paddingVertical: 12,
   },
   recheckButtonText: {
-    color: Colors.textSecondary,
+    ...Typography.captionRegular,
     fontSize: 13,
+    color: Colors.mutedSlate,
     fontWeight: '600',
   },
 });

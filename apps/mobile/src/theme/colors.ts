@@ -1,44 +1,79 @@
+/**
+ * HAQ Official Brand Palette — Modern Premium
+ * Anchor: Deep Midnight Navy (#101A3A) & Warm Ivory (#FAF8F3)
+ * Accent: Saffron Orange (#F59A23)
+ */
 export const Colors = {
-  // Brand foundation
-  background: '#070A0F',
-  backgroundSecondary: '#0D1420',
-  surface: '#111C29',
-  surfaceElevated: '#162334',
-  border: '#1C2B3F',
-  borderHighlight: '#2A3F5B',
+  // Core Brand Tokens
+  primary: '#101A3A',             // Deep Midnight Navy
+  background: '#FAF8F3',          // Warm Ivory
+  accent: '#F59A23',              // Saffron Orange
+  secondary: '#687386',           // Muted Slate
+  surface: '#FFFFFF',             // Pure White
+  border: '#E9E5DC',              // Soft Warm Grey
+  success: '#23865A',             // Refined Green
+  warning: '#D78A24',             // Warm Amber
+  error: '#C74B4B',               // Muted Red
 
-  // Core accents
-  primaryCobalt: '#1677FF',
-  primaryCobaltMuted: '#0D47A1',
-  constructionOrange: '#FF6B2C',
-  constructionOrangeMuted: '#9A3412',
-  constructionOrangeGlow: 'rgba(255, 107, 44, 0.15)',
+  // Modern Premium Aliases
+  primaryNavy: '#101A3A',
+  backgroundWarm: '#FAF8F3',
+  cardSurface: '#FFFFFF',
+  accentSaffron: '#F59A23',
+  accentSaffronDark: '#D47E11',
+
+  // Named Palette Helpers
+  midnightNavy: '#101A3A',
+  midnightNavyLight: '#1E2F5E',
+  warmIvory: '#FAF8F3',
+  warmIvoryAlt: '#F3EFE6',
+  saffronOrange: '#F59A23',
+  saffronOrangeLight: '#FFF5E8',
+  saffronOrangeDark: '#D47E11',
+  mutedSlate: '#687386',
+  softGrey: '#E9E5DC',
+  pureWhite: '#FFFFFF',
+
+  // Surfaces & Backgrounds
+  backgroundSecondary: '#F3EFE6',
+  surfaceElevated: '#FFFFFF',
+  surfaceCard: '#FFFFFF',
+  surfaceSubtle: '#F7F5EE',
 
   // Typography
-  textPrimary: '#F5F3EE',
-  textSecondary: '#A7B0BE',
-  textMuted: '#6B7A90',
+  textPrimary: '#101A3A',         // High contrast on Warm Ivory / Pure White
+  textSecondary: '#687386',       // Muted Slate for descriptions / metadata
+  textMuted: '#9AA3B2',           // Gentle captions / placeholders
+  textInverse: '#FFFFFF',         // Text on Navy buttons / cards
+  textAccent: '#D47E11',          // Emphasized orange text
 
-  // Status tokens
-  success: '#10B981',
-  successSurface: 'rgba(16, 185, 129, 0.12)',
-  successBorder: 'rgba(16, 185, 129, 0.3)',
+  // Borders & Dividers
+  borderSubtle: '#F0ECE4',
+  borderHighlight: '#D8D2C4',
 
-  warning: '#F59E0B',
-  warningSurface: 'rgba(245, 158, 11, 0.12)',
-  warningBorder: 'rgba(245, 158, 11, 0.3)',
-
-  error: '#EF4444',
-  errorSurface: 'rgba(239, 68, 68, 0.12)',
-  errorBorder: 'rgba(239, 68, 68, 0.3)',
-
-  info: '#38BDF8',
-  infoSurface: 'rgba(56, 189, 248, 0.12)',
-  infoBorder: 'rgba(56, 189, 248, 0.3)',
+  // Subtle Tints & Glows
+  accentGlow: 'rgba(245, 154, 35, 0.16)',
+  navyGlow: 'rgba(16, 26, 58, 0.08)',
+  successSurface: 'rgba(35, 134, 90, 0.10)',
+  successBorder: 'rgba(35, 134, 90, 0.25)',
+  warningSurface: 'rgba(215, 138, 36, 0.10)',
+  warningBorder: 'rgba(215, 138, 36, 0.25)',
+  errorSurface: 'rgba(199, 75, 75, 0.10)',
+  errorBorder: 'rgba(199, 75, 75, 0.25)',
+  infoSurface: 'rgba(16, 119, 255, 0.08)',
+  infoBorder: 'rgba(16, 119, 255, 0.20)',
+  info: '#1E60D0',
 
   // Document status badges
-  statusAvailable: '#10B981',
-  statusNeedsVerification: '#F59E0B',
-  statusMissing: '#64748B',
-  statusActionRequired: '#FF6B2C',
+  statusAvailable: '#23865A',
+  statusNeedsVerification: '#D78A24',
+  statusMissing: '#687386',
+  statusActionRequired: '#F59A23',
+
+  // Legacy compatibility aliases (safe fallbacks for unchanged screens)
+  primaryCobalt: '#101A3A',
+  primaryCobaltMuted: '#1E2F5E',
+  constructionOrange: '#F59A23',
+  constructionOrangeMuted: '#D47E11',
+  constructionOrangeGlow: 'rgba(245, 154, 35, 0.16)',
 };
