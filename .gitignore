@@ -47,4 +47,6 @@ artifacts/
 record_walkthrough.js
 *.mp4
 *.webm
+*.apk
+build-output/
 
